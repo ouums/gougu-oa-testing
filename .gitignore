@@ -1,0 +1,17 @@
+.env
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.venv/
+venv/
+.idea/
+.vscode/
+*.iml
+allure-results/
+allure-report/
+sessions.csv
+*.jtl
+*.log
+04_缺陷报告/截图/
+.DS_Store
+Thumbs.db
