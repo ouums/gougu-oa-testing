@@ -4,7 +4,7 @@ r"""
 
 【为什么需要这个脚本，而不是复用 cleanup_flow_data.py】
   `cleanup_flow_data.py` 是**上一轮的一次性脚本**：它的回收清单来自
-  `case_results_sp_flow.json` 里那批单据 id。作为「夹具回收器」它有致命问题 ——
+  上一轮执行结果里那批单据 id。作为「夹具回收器」它有致命问题 ——
   那批单据早已不存在，脚本会直接 `sys.exit(2)`。
 
   而夹具回收器是在 pytest 的 `finally` 里跑的（`conftest._fixture_lifecycle`），

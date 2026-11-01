@@ -4,10 +4,10 @@
 
 本套件把 02_测试用例/测试用例.xlsx 里 135 条功能用例（权限 55 / 审批流 35 / 合同 30 /
 薪资 15）用 pytest 重新实现一遍：**同一条用例、同一套判定口径、独立的真实断言**。
-它不是把 run_functional_cases_*.py 的结果 JSON 读一遍打印出来 —— 那样是"假通过"，
+它不是把早期一次性执行器的结果 JSON 读一遍打印出来 —— 那样是"假通过"，
 断言必须真的发起请求、真的比较返回值（项目质量红线「断言必须真的比较」）。
 
-【分层】请求与判定原语在 oa_kit.py（从 run_functional_cases.py 原样移植，口径逐字一致）；
+【分层】请求与判定原语在 oa_kit.py（从私有一次性执行器原样移植，口径逐字一致）；
         本文件只负责 fixture 装配：登录会话、环境前置自检、夹具编排、失败附件。
 
 【xfail 策略】已知缺陷用例标 xfail(strict=True)，**不标 skip** ——
@@ -245,7 +245,7 @@ def fixture_flow(request):
     """会签 / 或签夹具：经真实后台接口建 2 条固定审批流（oa_flow id=20 会签 / 21 或签）。
 
     回收用 `cleanup_flow_fixture.py`（夹具回收器），**不是** `cleanup_flow_data.py`。
-    后者是上一轮的一次性执行器：回收清单来自 `case_results_sp_flow.json` 里的旧单据 id，
+    后者是上一轮的一次性执行器：回收清单来自上一轮执行结果里的旧单据 id，
     那些单据早已不存在 ⇒ 它直接 `sys.exit(2)`。而本 fixture 的回收是在 `finally` 里跑的，
     一旦非 0 退出，`_recycle_fixture` 抛 RuntimeError，**夹具流程就留在库里**——
     实测踩过一次：SP 模块会话收尾 rc=2 ⇒ oa_flow 20/21 泄漏，每跑一轮多留一次。

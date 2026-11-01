@@ -3,11 +3,9 @@ r"""
 勾股OA 6.1.2 —— pytest 接口自动化 · 审批流模块（SP-001 ~ SP-035）
 
 【本文件做什么】
-  把 02_测试用例/测试用例.xlsx 里「审批流」35 条功能用例，按执行器
-  `03_接口测试/run_functional_cases_sp.py`（SP-001~SP-035）与
-  `03_接口测试/run_functional_cases_sp_flow.py`（**SP-023~026 的最终结论以它为准**）
-  的**请求参数、账号、判据**逐条重新发请求、自己比较，**一条用例 = 一个测试函数**。
-  结论必须与 case_results_sp.json / case_results_sp_flow.json 一致 —— 不一致就是两边之一错了。
+  把 02_测试用例/测试用例.xlsx 里「审批流」35 条功能用例，按私有一次性执行器
+  已确认的**请求参数、账号、判据**逐条重新发请求、自己比较，**一条用例 = 一个测试函数**。
+  SP-023~026 的最终结论以该执行器为准；公开仓库只保留可重复的 pytest 版本。
 
 【判定口径（与 oa_kit.py 的 9 个断言原语同源，不另立一套）】
   · 一律解析响应体 `code`，不看 HTTP 状态码（本系统 checkAuth 失败 = HTTP 200 + code=405）
@@ -50,7 +48,7 @@ SIDECAR = SCRIPT_DIR / "flow_fixture.json"     # setup_flow_data.py 写出的夹
 
 MARK = "【用例数据】"                            # 与执行器同一套数据标记（回收脚本据此识别）
 
-# 模块 -> (表名, 自由审批流程 id, check_name)；与执行器 run_functional_cases_sp.py:64-69 一致
+# 模块 -> (表名, 自由审批流程 id, check_name)；与私有一次性执行器口径一致
 MODULES = {
     "leaves":    ("oa_leaves",    1, "leaves"),
     "overtimes": ("oa_overtimes", 4, "overtimes"),
@@ -201,7 +199,7 @@ def _submit_fixed(sess, module, rid, flow_id):
 def _check(sess, module, rid, check, content="", node=1, next_uids="", flow_id=None):
     """审批动作。check=1 通过 / 2 驳回（界面文案「退回」，同一分支）/ 3 撤回。
 
-    check_node 与 content **必须带**（Check.php:385/467 无 isset 兜底，缺则 500）—— 见 证据-08。
+    check_node 与 content **必须带**（Check.php:385/467 无 isset 兜底，缺则 500）—— 见测试报告摘要。
     """
     return K.call(sess, "/api/check/flow_check", method="POST", data={
         "check_name": _check_name(module), "action_id": rid,
@@ -442,7 +440,7 @@ def _in_todo(rid, who):
 def _two_level_doc(sess_yc, sess_fc, cid, note):
     """建一张两级审批单：第一级 fengcailing 通过并指定第二级 admin，停在第二级。
 
-    与执行器 _two_level_doc（run_functional_cases_sp.py:678-691）同一路径：
+    与 `_two_level_doc`（见下方实现）同一路径：
     自由审批模式下第一级通过时带 check_node=2 + check_uids 即追加下一级（Check.php:385-398）。
     """
     rid, res = _add(sess_yc, "leaves", cid, note)
@@ -468,8 +466,8 @@ def _fixed_flow_doc(sess_yc, cid, note, flow_id):
 def test_sp_001_leave_submit_normal(sess_yucixin):
     """SP-001 请假单-正常提交：提交成功、单据生成且状态为待审批、oa_leaves.admin_id 为当前账号。
 
-    判据出处：执行器 run_functional_cases_sp.py:311-328（sp_001）。
-    关联证据：来源 case_results_sp.json（通过）。
+    判据：见断言（sp_001）。
+    判据：见断言。
     口径：本系统「建单」与「提交审批」是两个动作，用例的「提交」按两者合并的完整路径执行。
     """
     yc = uid(APPLICANT)
@@ -494,7 +492,7 @@ def test_sp_002_leave_required_blank(sess_yucixin):
 
     关联缺陷：观察-06（必填项校验缺失，查实但不单列缺陷，定级轻微 E）——
       界面侧 lay-verify=required 拦住、接口侧没拦，属「界面与接口的边界不一致」。
-    判据出处：执行器 run_functional_cases_sp.py:361-375（sp_002）+ EXTRA_SP_002（:336-348）。
+    判据：见断言（sp_002）+ EXTRA_SP_002（:336-348）。
     xfail 原因：实测 code=0「操作成功」并真的落库一条内容为空的草稿单；
       此处断言的是**正确行为**（被拒绝且不落库）—— 缺陷修复后本用例会 XPASS 判 FAILED，回来销账。
     """
@@ -508,8 +506,8 @@ def test_sp_002_leave_required_blank(sess_yucixin):
 def test_sp_003_leave_time_reversed(sess_yucixin):
     """SP-003 请假单-结束时间早于开始时间：应被拒绝并提示、不生成单据。
 
-    判据出处：执行器 run_functional_cases_sp.py:378-390（sp_003），实测文案
-      「结束时间不能小于开始时间」。关联证据：case_results_sp.json（通过）。
+    判据：见断言（sp_003），实测文案
+      「结束时间不能小于开始时间」。判据：见断言。
     """
     res, made = _add_expect_reject(sess_yucixin, "leaves", {
         "types": 1, "duration": 1, "start_date": _dt(1, 18), "end_date": _dt(1, 9),
@@ -523,7 +521,7 @@ def test_sp_003_leave_time_reversed(sess_yucixin):
 def test_sp_004_leave_duration_half_day(sess_yucixin):
     """SP-004 请假单-请假时长 0.5 天（边界）：按 0.5 存储，无精度丢失。
 
-    判据出处：执行器 run_functional_cases_sp.py:393-403（sp_004）——
+    判据：见断言（sp_004）——
       字段 decimal(10,1)，按**数值**比较（回读是字符串 "0.5"）。
     """
     rid, res = _add(sess_yucixin, "leaves", "SP-004", "0.5天", duration=0.5,
@@ -539,7 +537,7 @@ def test_sp_004_leave_duration_half_day(sess_yucixin):
 def test_sp_005_leave_duration_999_days(sess_yucixin):
     """SP-005 请假单-请假时长 999 天（边界）：系统未设上限，按「允许则正常入参」判通过。
 
-    判据出处：执行器 run_functional_cases_sp.py:406-420（sp_005）——
+    判据：见断言（sp_005）——
       要求 duration 正确入库且 check_status=0，无 500、无数据错乱。
     """
     rid, res = _add(sess_yucixin, "leaves", "SP-005", "999天", duration=999,
@@ -556,7 +554,7 @@ def test_sp_005_leave_duration_999_days(sess_yucixin):
 def test_sp_006_leave_status_pending(sess_yucixin):
     """SP-006 请假单-提交后状态为待审批：check_status=1（系统枚举值「审批中」，与「待审批」语义一致）。
 
-    判据出处：执行器 run_functional_cases_sp.py:423-433（sp_006）——
+    判据：见断言（sp_006）——
       用例写「待审批」，系统枚举值为 1，二者语义一致故判通过。
     """
     rid, res = _add(sess_yucixin, "leaves", "SP-006", "提交后待审批")
@@ -572,7 +570,7 @@ def test_sp_006_leave_status_pending(sess_yucixin):
 def test_sp_007_leave_view_own_detail(sess_yucixin):
     """SP-007 请假单-本人可查看详情：详情页正常返回且字段与提交内容一致。
 
-    判据出处：执行器 run_functional_cases_sp.py:436-446（sp_007）——
+    判据：见断言（sp_007）——
       GET /home/leaves/view?id=<本人单据>，判 HTTP 200 且页面含提交时填写的事由。
     """
     rid, res = _add(sess_yucixin, "leaves", "SP-007", "详情可查看")
@@ -592,7 +590,7 @@ def test_sp_007_leave_view_own_detail(sess_yucixin):
 def test_sp_008_leave_withdraw_pending(sess_yucixin):
     """SP-008 请假单-本人撤回待审批单据：撤回成功、状态变 4（已撤回）、不再出现在审批人待办。
 
-    判据出处：执行器 run_functional_cases_sp.py:449-468（sp_008）。
+    判据：见断言（sp_008）。
     """
     rid, res = _add(sess_yucixin, "leaves", "SP-008", "撤回目标")
     assert rid, "建单失败：%s" % K.brief(res)
@@ -614,8 +612,8 @@ def test_sp_008_leave_withdraw_pending(sess_yucixin):
 def test_sp_009_leave_withdraw_approved(sess_yucixin, sess_fengcailing):
     """SP-009 请假单-已通过单据不可撤回：撤回应被拒绝、状态保持 2（已通过）（**已知缺陷**）。
 
-    关联缺陷：BUG-18 状态机只在界面层校验（一般 C）；关联证据：证据-13。
-    判据出处：执行器 run_functional_cases_sp.py:471-488（sp_009）+ EXTRA_SP_009（:350-358）：
+    关联缺陷：BUG-18 状态机只在界面层校验（一般 C）。
+    判据：见断言（sp_009）+ EXTRA_SP_009（:350-358）：
       该对照排除了「归属校验」解释（QX-046 实测撤回收他人单据被拒），缺的是**状态**校验。
     xfail 原因：实测撤回 code=0「操作成功」、状态 2→4；此处断言的是**正确行为**，
       缺陷修复后本用例会 XPASS 判 FAILED，回来销账。
@@ -638,7 +636,7 @@ def test_sp_009_leave_withdraw_approved(sess_yucixin, sess_fengcailing):
 def test_sp_010_leave_approve_writeback(sess_yucixin, sess_fengcailing):
     """SP-010 请假单-审批通过后状态回写：状态变 2，且审批人/审批时间在**申请人可见**的审批历史里。
 
-    判据出处：执行器 run_functional_cases_sp.py:491-521（sp_010）——
+    判据：见断言（sp_010）——
       判定落在「申请人可见」：状态已回写 + get_flow_nodes 返回的最后一个通过记录有审批人与时间。
     观察项（不单列缺陷）：自由审批模式下单据表 check_time / check_last_uid 均不回写
       （Check.php 更新单据的 field 列表未含 check_time），但视图与前端 JS 均未消费这两列。
@@ -661,7 +659,7 @@ def test_sp_010_leave_approve_writeback(sess_yucixin, sess_fengcailing):
 def test_sp_011_leave_reject_with_opinion(sess_yucixin, sess_fengcailing):
     """SP-011 请假单-审批驳回后状态与驳回意见：状态变 3，驳回意见对申请人可见。
 
-    判据出处：执行器 run_functional_cases_sp.py:524-544（sp_011）——
+    判据：见断言（sp_011）——
       详情页审批时间线由 oaCheck.js 取 /api/check/get_flow_nodes 渲染（#checkBox 是空容器），
       故可见性打在该接口上，而不是 HTML 里搜字。
     """
@@ -682,7 +680,7 @@ def test_sp_011_leave_reject_with_opinion(sess_yucixin, sess_fengcailing):
 def test_sp_012_leave_resubmit_after_reject(sess_yucixin, sess_fengcailing):
     """SP-012 请假单-驳回后重新提交：编辑（add 带 id）后重新提交，状态回到 1，审批链重新生成。
 
-    判据出处：执行器 run_functional_cases_sp.py:547-570（sp_012）——
+    判据：见断言（sp_012）——
       Leaves::add() 带 id 即走 edit 分支；判定含「新审批链 flow_step ≥ 1 条」。
     """
     rid, res = _add(sess_yucixin, "leaves", "SP-012", "驳回后重提")
@@ -714,7 +712,7 @@ def _submit_case(cid, module, title_cn, note, duration, start, end,
                  sess_yc, sess_fc, sess_ad, **over):
     """加班/出差/外出的「正常提交」用例 —— 四模块结构一致，抽成一个函数
 
-    判据出处：执行器 run_functional_cases_sp.py:576-591（_submit_case）——
+    判据：见断言（_submit_case）——
       用例的「提交」= 建单动作，此时 check_status=0（待提交审批）。
     """
     rid, res = _add(sess_yc, module, cid, note, duration=duration, start=start, end=end, **over)
@@ -728,7 +726,7 @@ def _submit_case(cid, module, title_cn, note, duration, start, end,
 def test_sp_013_overtime_submit_normal(sess_yucixin, sess_fengcailing, sess_admin):
     """SP-013 加班单-正常提交：oa_overtimes 新增记录且状态为待审批（check_status=0）。
 
-    判据出处：执行器 run_functional_cases_sp.py:594-595（sp_013）→ _submit_case。
+    判据：见断言（sp_013）→ _submit_case。
     """
     _submit_case("SP-013", "overtimes", "加班单", "正常提交", 2, _dt(1, 19), _dt(1, 21),
                  sess_yucixin, sess_fengcailing, sess_admin)
@@ -737,7 +735,7 @@ def test_sp_013_overtime_submit_normal(sess_yucixin, sess_fengcailing, sess_admi
 def test_sp_014_overtime_time_reversed(sess_yucixin):
     """SP-014 加班单-结束时间早于开始时间：应被拒绝并提示、不生成单据。
 
-    判据出处：执行器 run_functional_cases_sp.py:598-608（sp_014），实测文案
+    判据：见断言（sp_014），实测文案
       「结束时间不能小于开始时间」。
     """
     res, made = _add_expect_reject(sess_yucixin, "overtimes", {
@@ -752,7 +750,7 @@ def test_sp_014_overtime_time_reversed(sess_yucixin):
 def test_sp_015_overtime_approve(sess_yucixin, sess_fengcailing):
     """SP-015 加班单-审批通过：状态变 2，加班时长与提交值一致。
 
-    判据出处：执行器 run_functional_cases_sp.py:611-626（sp_015）—— duration 期望 2.0。
+    判据：见断言（sp_015）—— duration 期望 2.0。
     """
     rid, res = _add(sess_yucixin, "overtimes", "SP-015", "审批通过", duration=2,
                     start=_dt(1, 19), end=_dt(1, 21))
@@ -770,7 +768,7 @@ def test_sp_015_overtime_approve(sess_yucixin, sess_fengcailing):
 def test_sp_016_trip_submit_normal(sess_yucixin, sess_fengcailing, sess_admin):
     """SP-016 出差单-正常提交：oa_trips 新增记录且状态为待审批（check_status=0）。
 
-    判据出处：执行器 run_functional_cases_sp.py:629-630（sp_016）→ _submit_case。
+    判据：见断言（sp_016）→ _submit_case。
     """
     _submit_case("SP-016", "trips", "出差单", "正常提交", 2, _dt(1, 9), _dt(3, 18),
                  sess_yucixin, sess_fengcailing, sess_admin)
@@ -779,7 +777,7 @@ def test_sp_016_trip_submit_normal(sess_yucixin, sess_fengcailing, sess_admin):
 def test_sp_017_trip_reject(sess_yucixin, sess_fengcailing):
     """SP-017 出差单-审批驳回：状态变 3，驳回意见对申请人可见。
 
-    判据出处：执行器 run_functional_cases_sp.py:633-651（sp_017）——
+    判据：见断言（sp_017）——
       与 SP-011 同口径：详情页时间线由 JS 取 get_flow_nodes 渲染，按该接口判定可见性。
     """
     rid, res = _add(sess_yucixin, "trips", "SP-017", "审批驳回", duration=2,
@@ -799,7 +797,7 @@ def test_sp_017_trip_reject(sess_yucixin, sess_fengcailing):
 def test_sp_018_out_submit_normal(sess_yucixin, sess_fengcailing, sess_admin):
     """SP-018 外出单-正常提交：oa_outs 新增记录且状态为待审批（check_status=0）。
 
-    判据出处：执行器 run_functional_cases_sp.py:654-655（sp_018）→ _submit_case。
+    判据：见断言（sp_018）→ _submit_case。
     """
     _submit_case("SP-018", "outs", "外出单", "正常提交", 3, _dt(1, 14), _dt(1, 17),
                  sess_yucixin, sess_fengcailing, sess_admin)
@@ -808,7 +806,7 @@ def test_sp_018_out_submit_normal(sess_yucixin, sess_fengcailing, sess_admin):
 def test_sp_019_out_approve(sess_yucixin, sess_fengcailing):
     """SP-019 外出单-审批通过：状态变 2 并正确回写。
 
-    判据出处：执行器 run_functional_cases_sp.py:658-672（sp_019）。
+    判据：见断言（sp_019）。
     """
     rid, res = _add(sess_yucixin, "outs", "SP-019", "审批通过", duration=3,
                     start=_dt(1, 14), end=_dt(1, 17))
@@ -828,7 +826,7 @@ def test_sp_019_out_approve(sess_yucixin, sess_fengcailing):
 def test_sp_020_two_level_flow(sess_yucixin, sess_fengcailing, sess_admin):
     """SP-020 全流程-多级审批逐级流转：两级均通过后状态才变 2。
 
-    判据出处：执行器 run_functional_cases_sp.py:694-712（sp_020）——
+    判据：见断言（sp_020）——
       审批链 flow_step=2 级；第一级通过后 check_status=1 且当前审批人转为 admin；
       第二级通过后 check_status=2。源码：Check.php:385-398（带 check_node=2 追加下一级）。
     """
@@ -850,7 +848,7 @@ def test_sp_020_two_level_flow(sess_yucixin, sess_fengcailing, sess_admin):
 def test_sp_021_two_level_step_pointer(sess_yucixin, sess_fengcailing, sess_admin):
     """SP-021 多级审批-第一级通过后流转到第二级：当前步骤字段指向第二级、第二级待办出现该单。
 
-    判据出处：执行器 run_functional_cases_sp.py:715-729（sp_021）——
+    判据：见断言（sp_021）——
       判据为 check_status=1 且 check_uids 含 admin(1) 且 check_history_uids 含 fengcailing(4)。
     """
     rid = _two_level_doc(sess_yucixin, sess_fengcailing, "SP-021", "流转到第二级")
@@ -867,7 +865,7 @@ def test_sp_021_two_level_step_pointer(sess_yucixin, sess_fengcailing, sess_admi
 def test_sp_022_two_level_middle_reject(sess_yucixin, sess_fengcailing, sess_admin):
     """SP-022 多级审批-中间级驳回后流程终止：状态变 3、不再产生后续待办、第一级记录保留。
 
-    判据出处：执行器 run_functional_cases_sp.py:732-748（sp_022）——
+    判据：见断言（sp_022）——
       记录数 rec_after ≥ rec_before（第一级记录保留）。源码：Check.php:527 起的驳回分支。
     """
     rid = _two_level_doc(sess_yucixin, sess_fengcailing, "SP-022", "第二级驳回")
@@ -885,15 +883,15 @@ def test_sp_022_two_level_middle_reject(sess_yucixin, sess_fengcailing, sess_adm
 
 # ===========================================================================
 # SP-023 ~ SP-026  会签 / 或签（需要 fixture_flow：自动重建 oa_flow 夹具流程，跑完自动回收）
-#   最终口径以 run_functional_cases_sp_flow.py / case_results_sp_flow.json 为准（4 条全部通过）
+#   最终口径以已确认结论为准（4 条全部通过）
 # ===========================================================================
 @pytest.mark.needs_flow_fixture
 def test_sp_023_co_sign_all_pass(fixture_flow, sess_yucixin, sess_fengcailing, sess_admin):
     """SP-023 会签-全部通过才通过：前几位通过后仍「审批中」，最后一位通过后才变「已通过」。
 
-    判据出处：run_functional_cases_sp_flow.py:224-269（sp_023），判据
+    判据：见断言（sp_023），判据
       app/api/controller/Check.php:414（check_types==1 需凑满本级人数才流转）。
-    关联证据：case_results_sp_flow.json（通过）。
+    判据：见断言。
     口径：固定审批流提交**不带 check_uids**（Check.php:89 的 !isset 分支），否则退回自由审批。
     """
     fid = _fixture_flow_id("co_sign")
@@ -928,9 +926,9 @@ def test_sp_023_co_sign_all_pass(fixture_flow, sess_yucixin, sess_fengcailing, s
 def test_sp_024_co_sign_one_reject(fixture_flow, sess_yucixin, sess_fengcailing, sess_admin):
     """SP-024 会签-一人驳回则整体驳回：整单置不通过（3）、check_uids 清空、其余会签人待办终止。
 
-    判据出处：run_functional_cases_sp_flow.py:275-315（sp_024），判据
+    判据：见断言（sp_024），判据
       Check.php:527 起的驳回分支（本级 check_role=4≠5，不走 :542 的回退逻辑，直接置终态 3）。
-    关联证据：case_results_sp_flow.json（通过）。
+    判据：见断言。
     """
     fid = _fixture_flow_id("co_sign")
     rid, sub, st, d0 = _fixed_flow_doc(sess_yucixin, "SP-024", "会签一人驳回", fid)
@@ -959,9 +957,9 @@ def test_sp_024_co_sign_one_reject(fixture_flow, sess_yucixin, sess_fengcailing,
 def test_sp_025_or_sign_any_pass(fixture_flow, sess_yucixin, sess_admin):
     """SP-025 或签-任一人通过即通过：任一人通过即流转，不等本级其余审批人。
 
-    判据出处：run_functional_cases_sp_flow.py:321-363（sp_025），判据 Check.php:414
+    判据：见断言（sp_025），判据 Check.php:414
       （check_types==2 任一人通过即流转）。
-    预期结果修订（case_results_sp_flow.json 明载）：或签处于**非末级**时，任一人通过是
+    预期结果修订（已确认结论明载）：或签处于**非末级**时，任一人通过是
       「进入下一级」而非「整单已通过」—— 故第1级通过后 check_status 仍=1、check_step_sort 0→1、
       check_uids 改写为第2级审批人。
     """
@@ -995,11 +993,11 @@ def test_sp_025_or_sign_any_pass(fixture_flow, sess_yucixin, sess_admin):
 def test_sp_026_or_sign_loser_todo_cancelled(fixture_flow, sess_yucixin, sess_admin):
     """SP-026 或签-其余审批人待办自动取消：落选者待办消失，且单据**仍在审批中**（非整单结束）。
 
-    判据出处：run_functional_cases_sp_flow.py:369-419（sp_026）。分辨力来自夹具刻意配的第 2 级：
+    判据：见断言（sp_026）。分辨力来自夹具刻意配的第 2 级：
       只有流程流转到下一级，「落选取消」才与「整单审批完成清空待办」区分开。
       判据含「落选者跨模块待办总数减少 1」（与审批中心同一判据 union_count(pend_to=4)）。
       源码：Check.php:411-413（移出已通过者）与 :430（或签流转时整体改写为下一级审批人）。
-    关联证据：case_results_sp_flow.json（通过）。
+    判据：见断言。
     """
     fid = _fixture_flow_id("or_sign")
     rid, sub, st, d0 = _fixed_flow_doc(sess_yucixin, "SP-026", "或签待办取消", fid)
@@ -1035,9 +1033,9 @@ def test_sp_026_or_sign_loser_todo_cancelled(fixture_flow, sess_yucixin, sess_ad
 def test_sp_027_approve_not_designated(sess_yucixin, sess_admin):
     """SP-027 审批动作-非指定审批人调用审批接口：被拦截、状态不变、零审批痕迹。
 
-    判据出处：执行器 run_functional_cases_sp.py:804-823（sp_027）——
+    判据：见断言（sp_027）——
       指定审批人为 fengcailing(4)，由 admin(1) 发起审批；实测拦截文案「您没权限审核该审批」。
-    关联证据：证据-03 ④（同一系统内审批动作有归属校验 vs 四模块 CRUD 没有）。
+    关联记录：测试报告摘要 ④（同一系统内审批动作有归属校验 vs 四模块 CRUD 没有）。
     """
     rid, res = _add(sess_yucixin, "leaves", "SP-027", "非指定审批人")
     assert rid, "建单失败：%s" % K.brief(res)
@@ -1057,7 +1055,7 @@ def test_sp_027_approve_not_designated(sess_yucixin, sess_admin):
 def test_sp_028_my_checklist_only_own(sess_fengcailing):
     """SP-028 待我审批列表-仅列出本人待审批单据：每条当前审批人均含本人，且条数与库一致。
 
-    判据出处：执行器 run_functional_cases_sp.py:826-845（sp_028）——
+    判据：见断言（sp_028）——
       status=1 才是「仅当前步骤审批人是我」（不带 status 会连历史审批一起返回）；
       比对基数用同一套 19 类单据 UNION 口径（union_count(pend_to=4, bucket=1)）。
     """
@@ -1087,7 +1085,7 @@ def test_sp_028_my_checklist_only_own(sess_fengcailing):
 def test_sp_029_copy_sees_not_approves(sess_yucixin, sess_admin):
     """SP-029 抄送-抄送人可见但不需审批：抄送人可见该单，且不出现在其待我审批列表。
 
-    判据出处：执行器 run_functional_cases_sp.py:848-869（sp_029）——
+    判据：见断言（sp_029）——
       提交时带 check_copy_uids=admin(1)，落库字段 oa_leaves.check_copy_uids 应含该 uid。
     比对口径：列表是按 (table_name, id) 定位本单（见 _has_doc 的跨表同号说明）；
       另加库级断言「抄送人 uid 不在 check_uids 里」——「可见但不需审批」的落库依据。
@@ -1118,7 +1116,7 @@ def test_sp_029_copy_sees_not_approves(sess_yucixin, sess_admin):
 def test_sp_030_back_to_applicant(sess_yucixin, sess_fengcailing):
     """SP-030 退回-审批人退回后回到申请人：状态 3（审批不通过），申请人可修改后重新提交。
 
-    判据出处：执行器 run_functional_cases_sp.py:872-897（sp_030）——
+    判据：见断言（sp_030）——
       本系统「退回」与「驳回」同走 check=2 分支（Check.php），故落库状态同为 3。
     """
     rid, res = _add(sess_yucixin, "leaves", "SP-030", "退回")
@@ -1142,7 +1140,7 @@ def test_sp_030_back_to_applicant(sess_yucixin, sess_fengcailing):
 def test_sp_031_approval_history_chain(sess_yucixin, sess_fengcailing, sess_admin):
     """SP-031 审批历史记录-完整记录审批链：多级 + 驳回后重提的历史完整、时间升序、元数据齐全。
 
-    判据出处：执行器 run_functional_cases_sp.py:900-922（sp_031）——
+    判据：见断言（sp_031）——
       口径：get_flow_nodes 查 oa_flow_record **不过滤 delete_time**，重提软删的旧记录仍返回，
       故历史 ≥4 条（提交/一级通过/驳回/重提提交）。
 
@@ -1194,7 +1192,7 @@ def test_sp_031_approval_history_chain(sess_yucixin, sess_fengcailing, sess_admi
 def test_sp_032_withdraw_after_level1(sess_yucixin, sess_fengcailing, sess_admin):
     """SP-032 撤回-撤回后流程终止：状态变 4、后续审批人待办清空、已产生的审批记录保留。
 
-    判据出处：执行器 run_functional_cases_sp.py:925-942（sp_032）。
+    判据：见断言（sp_032）。
     """
     rid = _two_level_doc(sess_yucixin, sess_fengcailing, "SP-032", "撤回")
     rec_before = _flow_record_count("leaves", rid)
@@ -1216,7 +1214,7 @@ def test_sp_032_withdraw_after_level1(sess_yucixin, sess_fengcailing, sess_admin
 def test_sp_033_mylist_status_filter(sess_yucixin):
     """SP-033 列表筛选-按状态筛选：各状态筛选结果与库中本人单据条数逐项一致、无跨状态串数据。
 
-    判据出处：执行器 run_functional_cases_sp.py:958-982（sp_033）——
+    判据：见断言（sp_033）——
       Approve::mylist() 用 status 三档：1 = check_status<2 待审批；2 = =2 通过；3 = >2 不通过/撤回；
       比对基数按 19 类单据 UNION 口径（union_count(uid=5, bucket=n)），与接口同源。
     """
@@ -1255,8 +1253,8 @@ def test_sp_033_mylist_status_filter(sess_yucixin):
 def test_sp_034_mylist_pagination(sess_yucixin):
     """SP-034 列表分页-第二页数据正确：逐页遍历不重复、不缺失、时间降序（**已知缺陷**）。
 
-    关联缺陷：BUG-16（列表分页排序键不唯一致跨页重复/漏行，一般 C）；关联证据：证据-11。
-    判据出处：执行器 run_functional_cases_sp.py:985-1030（sp_034）——
+    关联缺陷：BUG-16（列表分页排序键不唯一致跨页重复/漏行，一般 C）。
+    判据：见断言（sp_034）——
       唯一键取 (table_name, id)（19 类单据各表 id 独立自增，只比 id 会误判为重复）；
       逐页遍历而非只比相邻两页，以覆盖「并列组恰好压在页边界」的场景。
       根因：Approve::get_list() 收尾为 ORDER BY create_time DESC LIMIT offset,size，
@@ -1300,7 +1298,7 @@ def test_sp_034_mylist_pagination(sess_yucixin):
 def test_sp_035_own_attendance_list(sess_yucixin):
     """SP-035 单据列表-他人单据不出现在本人列表：「我的假勤」四个列表均只含本人单据。
 
-    判据出处：执行器 run_functional_cases_sp.py:1033-1057（sp_035）——
+    判据：见断言（sp_035）——
       用例的「我的假勤」= 菜单 496 → /oa/attendance/datalist（tab 1请假/2出差/3外出/4加班），
       该控制器显式加 $where[] = ['admin_id','=',$this->uid]，是系统的「本人列表」。
     观察项：另有 /home/{leaves,trips,outs,overtimes}/datalist 为全员可见的团队视图

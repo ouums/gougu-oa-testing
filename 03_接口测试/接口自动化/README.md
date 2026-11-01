@@ -3,9 +3,9 @@
 把 `02_测试用例/测试用例.xlsx` 里的 **135 条功能用例**（权限 55 / 审批流 35 / 合同 30 / 薪资 15）
 用 pytest + requests 重新实现：**同一条用例、同一套判定口径、独立的真实断言**。
 
-> 说明：项目最初用一次性执行器产出结果并回填 Excel；本仓库只发布**可重复的 pytest 版本**，
-> 一次性执行器及其结果 JSON 未包含（它们依赖私有交付物）。源码 docstring 里引用的
-> `run_functional_cases*.py`、`case_results_*.json` 仅用于标注判据来源，运行本仓库不需要它们。
+> 说明：项目最初用一次性执行器产出结果并回填 Excel；本仓库只发布**可重复的 pytest 版本**。
+> 一次性执行器及其结果 JSON 属于私有交付物，未随仓库分发；本目录代码不依赖它们，
+> 直接按「快速开始」安装依赖、配置环境即可运行。
 > `oa_kit.py` 的断言口径沿用当时的规则：**一律解析响应体 JSON 的 `code`，不看 HTTP 状态码**。
 
 ---
@@ -102,7 +102,7 @@ allure-pytest 把 `xfail` **一律记成 `skipped`**，所以 Allure 首页会�
 `statusDetails.message`，里面带着完整的「应有行为 vs 实测」原文：
 
 ```
-XFAIL 缺陷三：删除职位后 oa_position_group 映射未回收…（证据-09）
+XFAIL 缺陷三：删除职位后 oa_position_group 映射未回收…
 AssertionError: 职位已删除 → 关联账号的员工列表权限应被回收（405）
        —— 实测：http=200 code=0 msg=
 ```
@@ -359,14 +359,14 @@ pytest_cleanup.cleanup({"oa_leaves": [1316]}, apply_=True)   # 显式 id，分�
 这一情形返回 rc=0，否则它会变成一个「夹具泄漏放大器」。
 
 实测踩过的坑：`fixture_flow` 原先挂的是 `cleanup_flow_data.py`，那是**上一轮的一次性
-执行器**，回收清单来自 `case_results_sp_flow.json` 里的旧单据 id。那些单据早没了 ⇒
+执行器**，回收清单来自上一轮执行结果里的旧单据 id。那些单据早没了 ⇒
 脚本 `sys.exit(2)` ⇒ 会话收尾 rc=2 ⇒ 抛异常 ⇒ `oa_flow` 20/21 泄漏，**每跑一轮多留一次**。
 
 两条判定标准，写新回收器时逐条对：
 
 | | 一次性清理脚本（`cleanup_*_data.py`） | 夹具回收器（`cleanup_*_fixture.py`） |
 |---|---|---|
-| 回收清单来源 | 本轮结果 JSON 里的单据 id | **按标记现查**（如 `oa_flow.title LIKE '【测试】%'`） |
+| 回收清单来源 | 上一轮执行结果里的单据 id | **按标记现查**（如 `oa_flow.title LIKE '【测试】%'`） |
 | 目标不存在时 | 报错退出（rc=2，提醒你搞错了） | **rc=0 空操作**（本就不该在） |
 | 幂等 | 不要求 | **必须**（`finally` 里反复跑） |
 | 回读基准 | 本轮新增归零 | 回到**出厂/保留夹具基线**（`oa_flow` 19 行） |

@@ -1,12 +1,12 @@
 # -*- coding: utf-8 -*-
 """合同管理 30 条功能用例（HT-001 ~ HT-030）的 pytest 实现。
 
-【结论对齐】与 03_接口测试/case_results_ht.json 逐条一致：**26 通过 / 4 失败**。
+【结论】与测试报告摘要一致：**26 通过 / 4 失败**。
   4 条失败用例（HT-012 / HT-018 / HT-025 / HT-028）都是已单列缺陷的用例，标
   xfail(strict=True) + known_defect —— 断言写「**正确行为**」：缺陷存在时记 xfailed，
   缺陷修复后 XPASS 并被判 FAILED（pytest.ini 的 xfail_strict=true 让 xfail 成为活的回归探针）。
 
-【与执行器 run_functional_cases_ht.py 的关系】请求参数、账号、判据、数据标记
+【口径来源】请求参数、账号、判据、数据标记
   （code 前缀 HT-CASE- / name 前缀【用例数据】）全部沿用执行器；**结论字符串不复用** ——
   每条用例自己发请求、自己比较（README「断言必须真的比较」）。
   唯一的结构性差异：执行器按顺序共享上下文（HT-002 依赖 HT-001 建的合同、HT-025/028 依赖
@@ -578,7 +578,7 @@ def test_ht_011_amount_min_nonzero(sess_fengcailing, ht_ids):
 def test_ht_012_amount_negative(sess_fengcailing, ht_ids):
     """HT-012 金额 -100：应被服务端范围校验拒绝（实测被接受并入库，缺陷）。
 
-    账号：fengcailing(uid=4)。关联缺陷：BUG-17（关联证据：证据-12）。
+    账号：fengcailing(uid=4)。关联缺陷：BUG-17。
     判据出处：ContractValidate 的 cost 规则只有 require|checkNumer(is_numeric)，
     没有 >0 的范围校验 —— 正确行为是服务端拒绝负数金额。
     测试点：用例预期写明「或明确记录系统是否允许负数（若允许则属校验缺失）」，
@@ -599,7 +599,7 @@ def test_ht_012_amount_negative(sess_fengcailing, ht_ids):
 def test_ht_018_tax_out_of_range(sess_fengcailing, ht_ids):
     """HT-018 税点越界 -5 / 101：应被服务端范围校验拒绝（实测均被接受入库，缺陷）。
 
-    账号：fengcailing(uid=4)。关联缺陷：BUG-17（关联证据：证据-12）。
+    账号：fengcailing(uid=4)。关联缺陷：BUG-17。
     判据出处：ContractValidate 的规则表里根本没有 tax 这一项（只有 code/name/cost/id），
     -5% 与 101% 都能直接入库并参与后续金额计算。
     测试点：用例预期写明「或明确记录系统未做范围校验（属校验缺失）」，实测未做任何范围校验。
@@ -892,7 +892,7 @@ def test_ht_024_archive(sess_fengcailing, sess_admin, ht_ids):
 def test_ht_025_archived_contract_edit_blocked(sess_fengcailing, sess_admin, ht_ids):
     """HT-025 已归档合同不可编辑：写接口应拒绝改写已归档单据（实测被改写，缺陷）。
 
-    账号：操作人 fengcailing(uid=4)。关联缺陷：BUG-18（关联证据：证据-13）。
+    账号：操作人 fengcailing(uid=4)。关联缺陷：BUG-18。
     判据出处：Contract.php:393 的 GET 分支对 check_status ∈ {1,2,3} 返回 403，
     但 isAjax 的**写入分支**（同文件 347~378 行）对 check_status 不做任何判断 ⇒
     状态校验只做在「打开表单」这一步，接口层没有 —— 正确行为是写接口同样拒绝。
@@ -925,7 +925,7 @@ def test_ht_028_voided_contract_resubmit_blocked(sess_fengcailing, sess_admin, h
     """HT-028 已作废合同不再参与审批：提交接口应拒绝（实测被推进到审批中，缺陷）。
 
     账号：操作人 fengcailing(uid=4) 试图提交，作废人 admin(uid=1)。
-    关联缺陷：BUG-18（关联证据：证据-13）。
+    关联缺陷：BUG-18。
     判据出处：view.html 把整个审批区包在 {if stop_time==0 AND void_time==0} 内 ——
     「作废后不再参与审批」只由模板条件保证，submit_check **不校验** void_time / stop_time。
     正确行为：界面无入口（这条当前成立）**且**接口拒绝提交（这条当前不成立）。

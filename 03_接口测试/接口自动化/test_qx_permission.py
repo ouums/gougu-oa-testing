@@ -4,24 +4,23 @@ r"""
 
 【本模块是什么】
   `02_测试用例/测试用例.xlsx` 里 55 条权限用例（QX-001~055）的**可重复自动化版本**。
-  判定口径与一次性执行器 `03_接口测试/run_functional_cases.py`（QX-001~044）与
-  `03_接口测试/run_functional_cases_perm.py`（QX-045~055）**逐字一致** ——
-  参数、账号、判据均从这两个执行器的源码里读出，但**结论不读它的 JSON**：
+  判定口径沿用私有一次性执行器（QX-001~055）已确认的口径 ——
+  参数、账号、判据均取自执行器，但**结论不读它的 JSON**：
   每个函数自己发起请求、自己比较返回值（项目质量红线「断言必须真的比较」）。
 
-【结果对齐】与 `case_results_qx.json` / `case_results_perm.json` 的「结果」字段一一对应：
+【结果对齐】与测试报告摘要的统计口径一致：
   · 记为**通过**的 44 条 → 正常断言（本系统当前行为即正确行为）；
   · 记为**失败**的 11 条 → `xfail(strict=True)` + `known_defect`，函数体里写**正确行为**的断言：
-        QX-030（缺陷三 删职位后权限未回收 / 证据-09）
-        QX-039~044（水平越权四模块读改删 / 证据-03，严重 B）
-        QX-047、QX-048（站内消息 check/del 无归属校验 / 证据-05，严重 B）
-        QX-052（/api/map/getLocation 未登录可达 + 参数未兜底 500 / 证据-08、证据-01）
-        QX-054（app/api 缺 3 道闸门：会话超时后仍返回业务数据 / 证据-01 §c）
+        QX-030（缺陷三 删职位后权限未回收 / 见缺陷摘要）
+        QX-039~044（水平越权四模块读改删 / 见缺陷摘要，严重 B）
+        QX-047、QX-048（站内消息 check/del 无归属校验 / 见缺陷摘要，严重 B）
+        QX-052（/api/map/getLocation 未登录可达 + 参数未兜底 500 / 见缺陷摘要）
+        QX-054（app/api 缺 3 道闸门：会话超时后仍返回业务数据 / 见缺陷摘要）
     `pytest.ini` 开 `xfail_strict=true` ⇒ 缺陷修复后这些用例 XPASS 并直接判 FAILED，
     提醒回来销账（xfail 是活的回归探针，不是永不失效的注释）。
 
 【预期结果修订台账】QX-002 / QX-007 等 12 条按执行器 `REVISIONS` 的**修订后口径**断言
-  （详见 run_functional_cases.py:209-245），模块内逐条在 docstring 中标注。
+  模块内逐条在 docstring 中标注。
 
 【只读为主 + 数据回收】本模块多数用例是只读权限探测。凡新建数据：
   · 单据表 → `K.track()` 登记，由 conftest 会话级回收（pytest_cleanup）按显式 id 删除；
@@ -78,7 +77,7 @@ CONTRACT_ID = 1020                    # QX-034 的目标合同（code=HT-TEST-00
 
 # 本模块自建、框架回收计划覆盖不到的数据：[(表名, WHERE 子句, 说明)]
 _LOCAL = []
-# 受害者单据缓存：{(表名): (id, 标记)} —— QX-039/040/041 共用一张单（对齐证据-03 的取证顺序）
+# 受害者单据缓存：{(表名): (id, 标记)} —— QX-039/040/041 共用一张单（对齐私有取证记录的取证顺序）
 _DOCS = {}
 # 会话缓存
 _SESS = {}
@@ -175,7 +174,7 @@ def _local_cleanup():
 def _purge_leftovers():
     """幂等：清掉上一轮崩溃/中断留下的同名夹具残留（全部**精确等值**定位，绝不 LIKE）。
 
-    对齐执行器 run_functional_cases_perm.py 的「夹具幂等」步骤：夹具标题固定，
+    对齐私有一次性执行器的「夹具幂等」步骤：夹具标题固定，
     故上一轮的残留可被精确定位；清完再建，避免出现两份同名夹具把断言搅乱。
     """
     K.run_sql("DELETE FROM oa_msg WHERE title='%s';" % TITLE_MSG)
@@ -194,7 +193,7 @@ def _purge_leftovers():
 def _set_group4_rules(sess_admin, nodes, title=TITLE_GROUP_FIX, note=""):
     """角色组 4 的权限节点分配保存（POST /home/role/add，id 存在即编辑）。
 
-    返回 (响应, 保存后的 rules 串)。执行器口径见 run_functional_cases_perm.py:431-441。
+    返回 (响应, 保存后的 rules 串)。判据见断言。
     """
     data = {"id": str(GID_FIX), "title": title, "status": "1"}
     for i, n in enumerate(nodes):
@@ -365,7 +364,7 @@ def _qx_env(request):
       ① 幂等清残留 —— 上一轮崩溃可能留下同名夹具（角色组A/职位A/账号A/受害者消息）；
       ② 角色组 4 归一化 —— rules 复位为 496（仅「我的假勤」），mobile_bar/mobile_menu
          若为 NULL 则置空串（NULL 会让编辑页 explode() 报弃用告警并放大成 500，属夹具形态
-         不一致而非产品缺陷，对齐 run_functional_cases_perm.py 的夹具处理）；
+         不一致而非产品缺陷，对齐私有一次性执行器的夹具处理）；
       ③ 清一次缓存，保证后续权限判定从干净状态开始。
     teardown（--keep-fixtures 时跳过，便于停在现场）：
       ④ 按显式 WHERE 兜底删除框架回收计划不覆盖的表（oa_trips / oa_message / oa_msg /
@@ -403,7 +402,7 @@ def test_qx_001_role_list_admin_allowed(sess_admin):
     """QX-001 角色组列表-超管可查看。
 
     账号 admin(1)；GET /home/role/index。
-    判据出处：run_functional_cases.py:255（期望 is_allowed）；结果 JSON 记「通过」。
+    判据：见断言（期望 is_allowed）；已确认结论为「通过」。
     """
     res = K.call(sess_admin, "/home/role/index", "GET")
     K.record("admin GET /home/role/index", res)
@@ -417,7 +416,7 @@ def test_qx_002_role_list_manager_allowed(sess_fengcailing):
     判据出处：REVISIONS['QX-002']（预期结果修订台账）—— 出厂「管理岗角色」rules 含节点
     39 home/role/index（FIND_IN_SET=18），故管理岗看角色组是**被授予的权限**，不是越权；
     原预期「被拦截 code=405」的初始假设「管理岗=非管理员」不成立，已修订为「可查看」。
-    结果 JSON 记「通过」（修订后口径）。
+    已确认结论为「通过」（修订后口径）。
     """
     res = K.call(sess_fengcailing, "/home/role/index", "GET")
     K.record("fengcailing GET /home/role/index", res)
@@ -428,8 +427,8 @@ def test_qx_003_role_list_biz_denied(sess_yucixin):
     """QX-003 角色组列表-业务岗被拦截。
 
     账号 yucixin(5)；GET /home/role/index。
-    判据出处：run_functional_cases.py:257（期望 is_denied）—— 业务岗角色组 3 不含节点 39。
-    结果 JSON 记「通过」。
+    判据：见断言（期望 is_denied）—— 业务岗角色组 3 不含节点 39。
+    已确认结论为「通过」。
     """
     res = K.call(sess_yucixin, "/home/role/index", "GET")
     K.record("yucixin GET /home/role/index", res)
@@ -440,9 +439,9 @@ def test_qx_004_role_add_new_group(sess_admin):
     """QX-004 角色组新增-超管新增成功。
 
     账号 admin(1)；POST /home/role/add {title=测试-新增角色A, status=1, rule[0]=97}。
-    判据出处：run_functional_cases_perm.py:252-266 —— 判定三件套：code=0、oa_admin_group 行数 +1、
+    判据：见断言 —— 判定三件套：code=0、oa_admin_group 行数 +1、
     新角色 rules 含节点 97。新建的角色组登记回收；QX-029 会改职位映射到它，故**本用例不删它**。
-    结果 JSON 记「通过」。
+    已确认结论为「通过」。
     """
     n0 = int(K.scalar("SELECT COUNT(*) FROM oa_admin_group;"))
     res = K.call(sess_admin, "/home/role/add", "POST",
@@ -466,11 +465,11 @@ def test_qx_005_role_delete_in_use_blocked(sess_admin):
     """QX-005 角色组删除-删除已被职位占用的角色组应被拒绝。
 
     账号 admin(1)；DELETE /home/role/delete?id=4（角色组 4 被 oa_position_group 引用）。
-    判据出处：run_functional_cases_perm.py:269-282（blocked = code=1 且 msg 含「还在使用」）
+    判据：见断言（blocked = code=1 且 msg 含「还在使用」）
     + 源码 app/home/controller/Role.php delete()：`PositionGroup::where(group_id)->count()>0`
     时返回「该权限组还在使用，请去除使用者关联再删除」。
     注意：该动作要求 `request()->isDelete()`，故必须用 DELETE 方法（oa_kit.call 发不出 DELETE，
-    本模块用 _delete()）。结果 JSON 记「通过」。
+    本模块用 _delete()）。已确认结论为「通过」。
     """
     res = _delete(sess_admin, "/home/role/delete", {"id": str(GID_FIX)})
     K.record("admin DELETE /home/role/delete?id=4（被职位引用）", res)
@@ -485,8 +484,8 @@ def test_qx_005_role_delete_in_use_blocked(sess_admin):
 def test_qx_006_rule_tree_admin_allowed(sess_admin):
     """QX-006 权限节点树-超管可查看。
 
-    账号 admin(1)；GET /home/rule/index。判据出处：run_functional_cases.py:258。
-    结果 JSON 记「通过」。
+    账号 admin(1)；GET /home/rule/index。判据：见断言。
+    已确认结论为「通过」。
     """
     res = K.call(sess_admin, "/home/rule/index", "GET")
     K.record("admin GET /home/rule/index", res)
@@ -498,7 +497,7 @@ def test_qx_007_rule_tree_manager_allowed(sess_fengcailing):
 
     账号 fengcailing(4)；GET /home/rule/index。
     判据出处：REVISIONS['QX-007'] —— 管理岗角色持有节点 24 home/rule/index（FIND_IN_SET=9），
-    原预期「被拦截」修订为「可查看」。结果 JSON 记「通过」（修订后口径）。
+    原预期「被拦截」修订为「可查看」。已确认结论为「通过」（修订后口径）。
     """
     res = K.call(sess_fengcailing, "/home/rule/index", "GET")
     K.record("fengcailing GET /home/rule/index", res)
@@ -509,9 +508,9 @@ def test_qx_008_role_rule_save_grant(sess_admin):
     """QX-008 权限节点分配保存-超管保存成功（给角色组 4 增加节点 97）。
 
     账号 admin(1)；POST /home/role/add {id=4, rule[]={496,97}}。
-    判据出处：run_functional_cases_perm.py:431-441 —— code=0 且 oa_admin_group.rules 里
+    判据：见断言 —— code=0 且 oa_admin_group.rules 里
     出现节点 97（按**逗号切分后的成员**比较，不是子串包含，避免 97/497 这类前缀误判）。
-    结果 JSON 记「通过」。
+    已确认结论为「通过」。
     """
     res, after = _set_group4_rules(sess_admin, [NODE_ATT, NODE_EMP])
     K.expect((res.get("code") == 0, "code=%s msg=%s" % (res.get("code"), res.get("msg"))),
@@ -524,9 +523,9 @@ def test_qx_009_role_rule_revoke_effective(sess_admin, sess_testmin):
     """QX-009 权限节点取消勾选-权限被回收（即时生效且与清缓存无关）。
 
     账号 admin(1) 改角色组 4；观察对象 testmin(108)（职位 4 → 角色组 4）。
-    判据出处：run_functional_cases_perm.py:473-500 —— 先预热（rules 非空时 RulesSrc 会写缓存），
+    判据：见断言 —— 先预热（rules 非空时 RulesSrc 会写缓存），
     再取消勾选节点 97，**不调用任何清缓存动作**立即访问 /user/user/index，期望 405；
-    并以「清缓存后再访问」作对照（翻转即说明依赖缓存）。结果 JSON 记「通过」。
+    并以「清缓存后再访问」作对照（翻转即说明依赖缓存）。已确认结论为「通过」。
     前置构造：先把角色组 4 复位为仅含 496（QX-010 可能留下节点 97）。
     """
     res, rules = _set_group4_rules(sess_admin, [NODE_ATT], note="（QX-009 前置复位）")
@@ -560,11 +559,11 @@ def test_qx_010_role_rule_grant_effective(sess_admin, sess_testmin):
     r"""QX-010 权限节点分配-保存后权限即时生效。
 
     账号 admin(1) 改角色组 4；观察对象 testmin(108)。
-    判据出处：run_functional_cases_perm.py:447-471 —— 保存后**不调用任何清缓存动作**
+    判据：见断言 —— 保存后**不调用任何清缓存动作**
     立即访问 /user/user/index，期望放行（code=0）；并作清缓存对照。
     机制依据：clear_cache($key) → think\Cache::clear() 无 $tag 形参、File::clear() 亦无参
     且直接 rmdir 整个缓存目录 ⇒ 传入的 $key 被忽略，任何一次 clear_cache() 都是全量清空。
-    结果 JSON 记「通过」。
+    已确认结论为「通过」。
     前置构造：先回收节点 97（QX-009 会留下 revoked 状态；此处显式复位为 496）。
     """
     res, rules = _set_group4_rules(sess_admin, [NODE_ATT], note="（QX-010 前置复位）")
@@ -591,7 +590,7 @@ def test_qx_010_role_rule_grant_effective(sess_admin, sess_testmin):
 
 def test_qx_011_module_manage_admin_allowed(sess_admin):
     """QX-011 功能模块管理-超管可访问。账号 admin(1)；GET /home/module/index。
-    判据出处：run_functional_cases.py:260。结果 JSON 记「通过」。"""
+    判据：见断言。"""
     res = K.call(sess_admin, "/home/module/index", "GET")
     K.record("admin GET /home/module/index", res)
     K.expect(K.is_allowed(res), "超管应能访问功能模块管理（code=0）")
@@ -602,7 +601,7 @@ def test_qx_012_module_manage_manager_allowed(sess_fengcailing):
 
     账号 fengcailing(4)；GET /home/module/index。
     判据出处：REVISIONS['QX-012'] —— 管理岗持有节点 17 home/module/index（FIND_IN_SET=5），
-    原预期「被拦截」修订为「可查看」。结果 JSON 记「通过」（修订后口径）。
+    原预期「被拦截」修订为「可查看」。已确认结论为「通过」（修订后口径）。
     """
     res = K.call(sess_fengcailing, "/home/module/index", "GET")
     K.record("fengcailing GET /home/module/index", res)
@@ -611,7 +610,7 @@ def test_qx_012_module_manage_manager_allowed(sess_fengcailing):
 
 def test_qx_013_dataauth_admin_allowed(sess_admin):
     """QX-013 数据权限配置-超管可访问。账号 admin(1)；GET /home/dataauth/index。
-    判据出处：run_functional_cases.py:262。结果 JSON 记「通过」。"""
+    判据：见断言。"""
     res = K.call(sess_admin, "/home/dataauth/index", "GET")
     K.record("admin GET /home/dataauth/index", res)
     K.expect(K.is_allowed(res), "超管应能访问数据权限配置（code=0）")
@@ -619,7 +618,7 @@ def test_qx_013_dataauth_admin_allowed(sess_admin):
 
 def test_qx_014_dataauth_biz_denied(sess_yucixin):
     """QX-014 数据权限配置-业务岗被拦截。账号 yucixin(5)；GET /home/dataauth/index。
-    判据出处：run_functional_cases.py:263。结果 JSON 记「通过」。"""
+    判据：见断言。"""
     res = K.call(sess_yucixin, "/home/dataauth/index", "GET")
     K.record("yucixin GET /home/dataauth/index", res)
     K.expect(K.is_denied(res), "业务岗应被 RBAC 拦下（code=405）")
@@ -627,7 +626,7 @@ def test_qx_014_dataauth_biz_denied(sess_yucixin):
 
 def test_qx_015_log_admin_allowed(sess_admin):
     """QX-015 操作日志-超管可查看。账号 admin(1)；GET /home/log/index。
-    判据出处：run_functional_cases.py:264。结果 JSON 记「通过」。"""
+    判据：见断言。"""
     res = K.call(sess_admin, "/home/log/index", "GET")
     K.record("admin GET /home/log/index", res)
     K.expect(K.is_allowed(res), "超管应能查看操作日志（code=0）")
@@ -635,7 +634,7 @@ def test_qx_015_log_admin_allowed(sess_admin):
 
 def test_qx_016_log_biz_denied(sess_yucixin):
     """QX-016 操作日志-业务岗被拦截。账号 yucixin(5)；GET /home/log/index。
-    判据出处：run_functional_cases.py:265。结果 JSON 记「通过」。"""
+    判据：见断言。"""
     res = K.call(sess_yucixin, "/home/log/index", "GET")
     K.record("yucixin GET /home/log/index", res)
     K.expect(K.is_denied(res), "业务岗应被 RBAC 拦下（code=405）")
@@ -643,7 +642,7 @@ def test_qx_016_log_biz_denied(sess_yucixin):
 
 def test_qx_017_conf_admin_allowed(sess_admin):
     """QX-017 系统配置-超管可访问。账号 admin(1)；GET /home/conf/index。
-    判据出处：run_functional_cases.py:266。结果 JSON 记「通过」。"""
+    判据：见断言。"""
     res = K.call(sess_admin, "/home/conf/index", "GET")
     K.record("admin GET /home/conf/index", res)
     K.expect(K.is_allowed(res), "超管应能访问系统配置（code=0）")
@@ -654,7 +653,7 @@ def test_qx_018_conf_manager_allowed(sess_fengcailing):
 
     账号 fengcailing(4)；GET /home/conf/index。
     判据出处：REVISIONS['QX-018'] —— 管理岗持有节点 13 home/conf/index（FIND_IN_SET=2），
-    原预期「被拦截」修订为「可查看」。结果 JSON 记「通过」（修订后口径）。
+    原预期「被拦截」修订为「可查看」。已确认结论为「通过」（修订后口径）。
     """
     res = K.call(sess_fengcailing, "/home/conf/index", "GET")
     K.record("fengcailing GET /home/conf/index", res)
@@ -663,7 +662,7 @@ def test_qx_018_conf_manager_allowed(sess_fengcailing):
 
 def test_qx_019_database_backup_admin_allowed(sess_admin):
     """QX-019 备份还原页-超管可访问。账号 admin(1)；GET /home/database/database。
-    判据出处：run_functional_cases.py:268。结果 JSON 记「通过」。"""
+    判据：见断言。"""
     res = K.call(sess_admin, "/home/database/database", "GET")
     K.record("admin GET /home/database/database", res)
     K.expect(K.is_allowed(res), "超管应能访问备份还原页（code=0）")
@@ -671,7 +670,7 @@ def test_qx_019_database_backup_admin_allowed(sess_admin):
 
 def test_qx_020_database_backup_biz_denied(sess_yucixin):
     """QX-020 数据还原-业务岗被拦截。账号 yucixin(5)；GET /home/database/database。
-    判据出处：run_functional_cases.py:269。结果 JSON 记「通过」。"""
+    判据：见断言。"""
     res = K.call(sess_yucixin, "/home/database/database", "GET")
     K.record("yucixin GET /home/database/database", res)
     K.expect(K.is_denied(res), "业务岗应被 RBAC 拦下（code=405）")
@@ -679,7 +678,7 @@ def test_qx_020_database_backup_biz_denied(sess_yucixin):
 
 def test_qx_021_user_list_admin_allowed(sess_admin):
     """QX-021 员工列表-超管可查看。账号 admin(1)；GET /user/user/index。
-    判据出处：run_functional_cases.py:270。结果 JSON 记「通过」。"""
+    判据：见断言。"""
     res = K.call(sess_admin, "/user/user/index", "GET")
     K.record("admin GET /user/user/index", res)
     K.expect(K.is_allowed(res), "超管应能查看员工列表（code=0）")
@@ -687,7 +686,7 @@ def test_qx_021_user_list_admin_allowed(sess_admin):
 
 def test_qx_022_user_list_manager_allowed(sess_fengcailing):
     """QX-022 员工列表-管理岗可查看。账号 fengcailing(4)；GET /user/user/index。
-    判据出处：run_functional_cases.py:271。结果 JSON 记「通过」。"""
+    判据：见断言。"""
     res = K.call(sess_fengcailing, "/user/user/index", "GET")
     K.record("fengcailing GET /user/user/index", res)
     K.expect(K.is_allowed(res), "管理岗应能查看员工列表（code=0）")
@@ -699,7 +698,7 @@ def test_qx_023_user_list_biz_allowed(sess_yucixin):
     账号 yucixin(5)；GET /user/user/index。
     判据出处：REVISIONS['QX-023'] —— 业务岗角色持有节点 97 user/user/index（FIND_IN_SET=123）：
     业务岗并非「低权限角色」，它持有企业员工、部门架构、岗位职称、销售合同的读写节点，
-    原预期「被拦截」修订为「可查看」。结果 JSON 记「通过」（修订后口径）。
+    原预期「被拦截」修订为「可查看」。已确认结论为「通过」（修订后口径）。
     """
     res = K.call(sess_yucixin, "/user/user/index", "GET")
     K.record("yucixin GET /user/user/index", res)
@@ -715,7 +714,7 @@ def test_qx_024_user_add_manager_gate_passed(sess_fengcailing):
     判据用 is_passed_gate：只要不是 405、不是跳登录页，就证明闸门放行了 —— 空载荷本就
     没有合法参数，业务层随后 500 属**另一条缺陷面**（Export.php:343 / Map.php:108 / Check.php:385,467
     同源的「参数未兜底 → 未定义数组键警告被升级成 ErrorException」），故实测串里原样保留 500，
-    不粉饰成「通过」。结果 JSON 记「通过」。
+    不粉饰成「通过」。已确认结论为「通过」。
     """
     res = K.call(sess_fengcailing, "/user/user/add", "POST", {})
     K.record("fengcailing POST /user/user/add（空载荷）", res)
@@ -729,7 +728,7 @@ def test_qx_025_department_biz_allowed(sess_yucixin):
 
     账号 yucixin(5)；GET /user/department/index。
     判据出处：REVISIONS['QX-025'] —— 业务岗持有节点 89 user/department/index（FIND_IN_SET=131），
-    原预期「被拦截」修订为「可查看」。结果 JSON 记「通过」（修订后口径）。
+    原预期「被拦截」修订为「可查看」。已确认结论为「通过」（修订后口径）。
     """
     res = K.call(sess_yucixin, "/user/department/index", "GET")
     K.record("yucixin GET /user/department/index", res)
@@ -738,7 +737,7 @@ def test_qx_025_department_biz_allowed(sess_yucixin):
 
 def test_qx_026_position_list_admin_allowed(sess_admin):
     """QX-026 职位列表-超管可查看。账号 admin(1)；GET /user/position/index。
-    判据出处：run_functional_cases.py:275。结果 JSON 记「通过」。"""
+    判据：见断言。"""
     res = K.call(sess_admin, "/user/position/index", "GET")
     K.record("admin GET /user/position/index", res)
     K.expect(K.is_allowed(res), "超管应能查看职位列表（code=0）")
@@ -751,10 +750,10 @@ def test_qx_027_position_add_with_group_mapping(sess_admin):
     """QX-027 新建职位并映射角色组-超管成功。
 
     账号 admin(1)；POST /user/position/add {title=测试职位A, work_price=0, group_id[0]=4}。
-    判据出处：run_functional_cases_perm.py:284-301 —— 判定四件套：code=0、oa_position 行数 +1、
+    判据：见断言 —— 判定四件套：code=0、oa_position 行数 +1、
     oa_position_group 出现 (pid, group_id=4) 映射行。职位与映射登记回收（映射表无 id 列，
     只能按 pid 登记 —— 框架的 track 承载不了，由模块夹具兜底）。
-    结果 JSON 记「通过」。
+    已确认结论为「通过」。
     """
     n0 = int(K.scalar("SELECT COUNT(*) FROM oa_position;"))
     res = K.call(sess_admin, "/user/position/add", "POST",
@@ -780,13 +779,13 @@ def test_qx_028_user_add_position_permission_effective(sess_admin):
     """QX-028 新建账号指定职位-权限按映射生效。
 
     账号 admin(1) 建号 → 以新账号登录访问两页。
-    判据出处：run_functional_cases_perm.py:303-365 —— 判定五件套：建号 code=0、oa_admin 行数 +1、
+    判据：见断言 —— 判定五件套：建号 code=0、oa_admin 行数 +1、
     position_id = 新建职位、我的假勤 code=0、员工列表 code=405（该职位映射角色组 4，rules 仅 496）。
     另含两条现场取证：① 新账号带 reg_pwd 时被「强制改密」闸门挡住（BaseController.php:121-125
     → 302 /home/index/edit_password.html）；② 产品**不允许自定义登录账号**：username 由姓名拼音
     自动生成并去重（User.php:161-162），故用例原文写「用 testpos/<OA_USER_PWD> 登录」已按实测修订为
-    以实际生成的 username 登录（预期结果修订台账见结果 JSON 的 QX-028「预期结果修订」）。
-    结果 JSON 记「通过」。
+    以实际生成的 username 登录（预期结果修订见 QX-028 的「预期结果修订」）。
+    已确认结论为「通过」。
     前置构造：角色组 4 复位为仅含 496（QX-010 会留下节点 97）。
     """
     res, rules = _set_group4_rules(sess_admin, [NODE_ATT], note="（QX-028 前置复位）")
@@ -831,10 +830,10 @@ def test_qx_029_position_group_change_effective(sess_admin):
 
     账号 admin(1)；POST /user/position/add {id=职位A, group_id[0]=角色组A}（角色组A 含节点 97）。
     观察对象：QX-028 建出的账号（职位 A）。
-    判据出处：run_functional_cases_perm.py:367-388 —— 判定三件套：改映射 code=0、
+    判据：见断言 —— 判定三件套：改映射 code=0、
     oa_position_group 的 (pid, group_id) 变为 (职位A, 角色组A)、该账号员工列表由 405 变 0。
-    关联证据：Position.php:72-73 改职位时清 adminRules（与 Role.php:90-91 改角色时不清形成对照）。
-    结果 JSON 记「通过」。
+    对照依据：Position.php:72-73 改职位时清 adminRules（与 Role.php:90-91 改角色时不清形成对照）。
+    已确认结论为「通过」。
     """
     pid = _position_a(sess_admin)
     gid_a = _group_a(sess_admin)
@@ -876,17 +875,17 @@ def test_qx_029_position_group_change_effective(sess_admin):
 
 @pytest.mark.known_defect
 @pytest.mark.xfail(reason="缺陷三：删除职位后 oa_position_group 映射未回收、adminRules 未清，"
-                          "Systematic::auth() 又不 join oa_position，权限照旧生效（证据-09）",
+                          "Systematic::auth() 又不 join oa_position，权限照旧生效",
                    strict=True)
 def test_qx_030_position_delete_revoke_permission(sess_admin):
     """QX-030 删除职位-关联账号权限应失效。**【已知缺陷，本用例记为失败 → xfail】**
 
     账号 admin(1)；DELETE /user/position/delete?id=职位A 后清缓存，以该账号重访两页。
-    判据出处：run_functional_cases_perm.py:390-413（期望两页均 405）。
+    判据：见断言（期望两页均 405）。
     关联缺陷：缺陷三「删除职位后权限未回收」—— Position.php:170-185 删职位既**不删
     oa_position_group 映射行、也不清 adminRules**，且 Systematic::auth() 解析权限时
     只 join oa_position_group 与 oa_admin_group、**不 join oa_position**（status=-1 无效），
-    故职位删掉后权限照旧生效（证据-09）。结果 JSON 记「失败」。
+    故职位删掉后权限照旧生效。已确认结论为「失败」。
     函数体写**正确行为**：职位已删 → 两页都应 405。缺陷在时失败 → xfail；
     修复后通过 → XPASS → strict 模式判 FAILED，提醒回来销账。
     """
@@ -922,7 +921,7 @@ def test_qx_031_vertical_biz_role_url(sess_yucixin):
     """QX-031 垂直越权-业务岗直接访问角色组管理 URL。
 
     账号 yucixin(5)；GET /home/role/index。
-    判据出处：run_functional_cases.py:278（期望 is_denied）。结果 JSON 记「通过」。
+    判据：见断言（期望 is_denied）。
     """
     res = K.call(sess_yucixin, "/home/role/index", "GET")
     K.record("yucixin GET /home/role/index（URL 直达）", res)
@@ -933,8 +932,8 @@ def test_qx_032_vertical_biz_role_add(sess_yucixin):
     """QX-032 垂直越权-业务岗调用角色组保存接口。
 
     账号 yucixin(5)；POST /home/role/add（空载荷）。
-    判据出处：run_functional_cases.py:279 + 写操作无副作用核对（oa_admin_group 行数前后一致）。
-    结果 JSON 记「通过」。
+    判据：见断言 + 写操作无副作用核对（oa_admin_group 行数前后一致）。
+    已确认结论为「通过」。
     """
     n0 = str(K.scalar("SELECT COUNT(*) FROM oa_admin_group;"))
     res = K.call(sess_yucixin, "/home/role/add", "POST", {})
@@ -950,9 +949,9 @@ def test_qx_033_vertical_zero_user_add():
     账号 qinjiaxian（执行器指定的攻击者，对齐 REVISIONS['QX-033']：原设计的攻击者「业务岗」
     实际持有节点 98 user/user/add，构不成垂直越权，故改用零权限口径账号复测）。
     请求：POST /user/user/add（空载荷）。
-    判据出处：run_functional_cases.py:280 + 无副作用核对（oa_admin 行数前后一致）。
+    判据：见断言 + 无副作用核对（oa_admin 行数前后一致）。
     框架边界：oa_kit.ACCOUNTS 未登记 qinjiaxian（get_session 会 KeyError），故本用例
-    直接经 oa_login.login 建会话（未改框架）。结果 JSON 记「通过」。
+    直接经 oa_login.login 建会话（未改框架）。已确认结论为「通过」。
     """
     n0 = str(K.scalar("SELECT COUNT(*) FROM oa_admin;"))
     res = K.call(_sess_of(ATTACKER_ZERO), "/user/user/add", "POST", {})
@@ -966,10 +965,10 @@ def test_qx_034_vertical_zero_contract_del():
     """QX-034 垂直越权-零权限口径账号删除他人合同（**预期结果已修订**）。
 
     账号 qinjiaxian；POST /contract/contract/del {id=1020}。
-    判据出处：run_functional_cases.py:281-282 + REVISIONS['QX-034']（原设计的业务岗攻击者
+    判据：见断言 + REVISIONS['QX-034']（原设计的业务岗攻击者
     持有节点 352 contract/contract/del，属被授权操作，故改用零权限口径账号复测）；
     无副作用核对：oa_contract.id=1020 的 delete_time 前后一致（基线 0）。
-    结果 JSON 记「通过」。
+    已确认结论为「通过」。
     """
     before = str(K.scalar("SELECT delete_time FROM oa_contract WHERE id=%d;" % CONTRACT_ID))
     K.expect((before == "0", "delete_time 基线=%s" % before),
@@ -986,7 +985,7 @@ def test_qx_035_anonymous_page_redirect():
     """QX-035 未登录访问需登录页面。
 
     干净会话（未登录）；GET /home/index/index。
-    判据出处：run_functional_cases.py:286（期望 is_login_redirect）。结果 JSON 记「通过」。
+    判据：见断言（期望 is_login_redirect）。
     """
     res = K.call(None, "/home/index/index", "GET")
     K.record("(未登录) GET /home/index/index", res)
@@ -999,7 +998,7 @@ def test_qx_036_anonymous_api_need_login():
     干净会话；POST /api/check/submit_check。
     判据出处：REVISIONS['QX-036'] —— 未登录时 `apiError('请先登录')` 走的是 code=1，
     原用例写 code=404 属状态码写错，行为本身（拦截且不返回业务数据）符合预期，
-    故按 code=1 且 msg 含「请先登录」判定。结果 JSON 记「通过」（修订后口径）。
+    故按 code=1 且 msg 含「请先登录」判定。已确认结论为「通过」（修订后口径）。
     """
     res = K.call(None, "/api/check/submit_check", "POST", {})
     K.record("(未登录) POST /api/check/submit_check", res)
@@ -1010,7 +1009,7 @@ def test_qx_037_vertical_manager_db_import(sess_fengcailing):
     """QX-037 垂直越权-管理岗访问数据还原（导入）接口。
 
     账号 fengcailing(4)；POST /home/database/import（空载荷）。
-    判据出处：run_functional_cases.py:283（期望 is_denied）。结果 JSON 记「通过」。
+    判据：见断言（期望 is_denied）。
     """
     res = K.call(sess_fengcailing, "/home/database/import", "POST", {})
     K.record("fengcailing POST /home/database/import", res)
@@ -1029,8 +1028,8 @@ def test_qx_038_flow_check_not_assignee_denied(sess_yucixin):
 
     账号 yucixin(5)（业务岗）；POST /api/check/flow_check {check_name=leaves, action_id=1072,
     check=1, check_uids=1, content, check_files}。目标单据归属 uid=4、审批人是 uid=1。
-    判据出处：run_functional_cases.py:477-500（blocked = code=1 且 msg 含「没权限审核」
-    且 check_status 前后一致）。结果 JSON 记「通过」。
+    判据：见断言（blocked = code=1 且 msg 含「没权限审核」
+    且 check_status 前后一致）。
     """
     table, aid = "oa_leaves", FLOW_TARGET_ID
     before = str(K.scalar("SELECT check_status FROM %s WHERE id=%d;" % (table, aid)))
@@ -1051,8 +1050,8 @@ def test_qx_046_flow_withdraw_others_denied(sess_yucixin):
     """QX-046 水平越权-业务岗撤回他人请假单（check=3 审批撤回）。
 
     账号 yucixin(5)；POST /api/check/flow_check {check_name=leaves, action_id=1072, check=3}。
-    判据出处：run_functional_cases.py:331-334 + 477-500（blocked = code=1 且 msg 含「没权限操作」
-    且 check_status 前后一致；撤回成功会把 check_status 改成 4）。结果 JSON 记「通过」。
+    判据：见断言 + 477-500（blocked = code=1 且 msg 含「没权限操作」
+    且 check_status 前后一致；撤回成功会把 check_status 改成 4）。已确认结论为「通过」。
     """
     table, aid = "oa_leaves", FLOW_TARGET_ID
     before = str(K.scalar("SELECT check_status FROM %s WHERE id=%d;" % (table, aid)))
@@ -1072,17 +1071,17 @@ def test_qx_046_flow_withdraw_others_denied(sess_yucixin):
 # ===========================================================================
 # QX-039 ~ QX-045：水平越权四模块（请假 / 加班 / 出差 / 外出）+ 本人对照
 #   受害者 yucixin(5)，攻击者 testemp(109) —— 与受害者**同职位 3 / 同角色组 3**
-#   （排除「上级看下级」的正当性）。源码：四模块 view/add/del 均无归属校验。证据-03，严重 B。
+#   （排除「上级看下级」的正当性）。源码：四模块 view/add/del 均无归属校验。私有取证记录，严重 B。
 # ===========================================================================
 @pytest.mark.known_defect
-@pytest.mark.xfail(reason="水平越权：leaves view 无归属校验，他人可读他人单据（证据-03，严重 B）",
+@pytest.mark.xfail(reason="水平越权：leaves view 无归属校验，他人可读他人单据（严重 B）",
                    strict=True)
 def test_qx_039_idor_read_others_leave(sess_yucixin, sess_testemp):
     """QX-039 水平越权-业务岗查看他人请假单详情。**【已知缺陷，本用例记为失败 → xfail】**
 
     受害者 yucixin 建单 → 攻击者 testemp GET /home/leaves/view?id=<他人单>。
-    判据出处：证据-03「[读-攻击者 testemp] GET /home/leaves/view?id=1002 -> HTTP 200
-    看到受害者事由原文=True」⇒ 原预期「被拦截，不返回他人请假单内容」未达成（结果 JSON 记「失败」）。
+    判据：见测试报告摘要「[读-攻击者 testemp] GET /home/leaves/view?id=1002 -> HTTP 200
+    看到受害者事由原文=True」⇒ 原预期「被拦截，不返回他人请假单内容」未达成（已确认结论为「失败」）。
     函数体写**正确行为**：他人单据的事由原文不得出现在攻击者的响应里。
     """
     rid, marker = _victim_doc("leaves-read", "leaves", "/home/leaves", sess_yucixin)
@@ -1092,14 +1091,14 @@ def test_qx_039_idor_read_others_leave(sess_yucixin, sess_testemp):
 
 
 @pytest.mark.known_defect
-@pytest.mark.xfail(reason="水平越权：leaves add(id) 编辑分支无归属校验，他人可静默改写单据（证据-03，严重 B）",
+@pytest.mark.xfail(reason="水平越权：leaves add(id) 编辑分支无归属校验，他人可静默改写单据（严重 B）",
                    strict=True)
 def test_qx_040_idor_edit_others_leave(sess_yucixin, sess_testemp):
     """QX-040 水平越权-业务岗编辑他人请假单。**【已知缺陷，本用例记为失败 → xfail】**
 
     攻击者 testemp POST /home/leaves/add?id=<他人单>（改写事由）。
-    判据出处：证据-03「[改-攻击者 testemp] POST /home/leaves/add?id=1002 -> code=0 操作成功」+
-    「[受害者回看] 事由已被改写=True」⇒ 预期未达成（结果 JSON 记「失败」）。
+    判据：见测试报告摘要「[改-攻击者 testemp] POST /home/leaves/add?id=1002 -> code=0 操作成功」+
+    「[受害者回看] 事由已被改写=True」⇒ 预期未达成（已确认结论为「失败」）。
     函数体写**正确行为**：他人单据的 reason 必须原样不变，且请求不应被当作成功放行。
     """
     rid, marker = _victim_doc("leaves-edit", "leaves", "/home/leaves", sess_yucixin)
@@ -1119,14 +1118,14 @@ def test_qx_040_idor_edit_others_leave(sess_yucixin, sess_testemp):
 
 
 @pytest.mark.known_defect
-@pytest.mark.xfail(reason="水平越权：leaves del 无归属校验，他人可软删单据（证据-03，严重 B）",
+@pytest.mark.xfail(reason="水平越权：leaves del 无归属校验，他人可软删单据（严重 B）",
                    strict=True)
 def test_qx_041_idor_delete_others_leave(sess_yucixin, sess_testemp):
     """QX-041 水平越权-业务岗删除他人请假单。**【已知缺陷，本用例记为失败 → xfail】**
 
     攻击者 testemp DELETE /home/leaves/del?id=<他人单>。
-    判据出处：证据-03「[删] leaves 模块 单号 1002 —— 攻击者 testemp（code=0 操作成功，软删）」
-    （且软删后该记录仍被列表列出 —— delete_time 过滤未生效）⇒ 预期未达成（结果 JSON 记「失败」）。
+    判据：见测试报告摘要「[删] leaves 模块 单号 1002 —— 攻击者 testemp（code=0 操作成功，软删）」
+    （且软删后该记录仍被列表列出 —— delete_time 过滤未生效）⇒ 预期未达成（已确认结论为「失败」）。
     函数体写**正确行为**：他人单据的 delete_time 必须保持 0。
     """
     rid, marker = _victim_doc("leaves-del", "leaves", "/home/leaves", sess_yucixin)
@@ -1141,13 +1140,13 @@ def test_qx_041_idor_delete_others_leave(sess_yucixin, sess_testemp):
 
 
 @pytest.mark.known_defect
-@pytest.mark.xfail(reason="水平越权：overtimes view 无归属校验，他人可读他人单据（证据-03，严重 B）",
+@pytest.mark.xfail(reason="水平越权：overtimes view 无归属校验，他人可读他人单据（严重 B）",
                    strict=True)
 def test_qx_042_idor_read_others_overtime(sess_yucixin, sess_testemp):
     """QX-042 水平越权-业务岗查看他人加班单。**【已知缺陷，本用例记为失败 → xfail】**
 
-    判据出处：证据-03 overtimes 模块「[读-攻击者 testemp] view?id=1002 -> 看到受害者事由原文=True」
-    （结果 JSON 记「失败」）。函数体写正确行为：他人单据原文不得出现在攻击者响应里。
+    判据：见测试报告摘要 overtimes 模块「[读-攻击者 testemp] view?id=1002 -> 看到受害者事由原文=True」
+    （已确认结论为「失败」）。函数体写正确行为：他人单据原文不得出现在攻击者响应里。
     """
     rid, marker = _victim_doc("overtimes-read", "overtimes", "/home/overtimes", sess_yucixin)
     page = K.call(sess_testemp, "/home/overtimes/view", "GET", {"id": rid})
@@ -1156,13 +1155,13 @@ def test_qx_042_idor_read_others_overtime(sess_yucixin, sess_testemp):
 
 
 @pytest.mark.known_defect
-@pytest.mark.xfail(reason="水平越权：trips view 无归属校验，他人可读他人单据（证据-03，严重 B）",
+@pytest.mark.xfail(reason="水平越权：trips view 无归属校验，他人可读他人单据（严重 B）",
                    strict=True)
 def test_qx_043_idor_read_others_trip(sess_yucixin, sess_testemp):
     """QX-043 水平越权-业务岗查看他人出差单。**【已知缺陷，本用例记为失败 → xfail】**
 
-    判据出处：证据-03 trips 模块「[读-攻击者 testemp] view?id=1002 -> 看到受害者事由原文=True」
-    （结果 JSON 记「失败」）。函数体写正确行为：他人单据原文不得出现在攻击者响应里。
+    判据：见测试报告摘要 trips 模块「[读-攻击者 testemp] view?id=1002 -> 看到受害者事由原文=True」
+    （已确认结论为「失败」）。函数体写正确行为：他人单据原文不得出现在攻击者响应里。
     """
     rid, marker = _victim_doc("trips-read", "trips", "/home/trips", sess_yucixin)
     page = K.call(sess_testemp, "/home/trips/view", "GET", {"id": rid})
@@ -1171,13 +1170,13 @@ def test_qx_043_idor_read_others_trip(sess_yucixin, sess_testemp):
 
 
 @pytest.mark.known_defect
-@pytest.mark.xfail(reason="水平越权：outs view 无归属校验，他人可读他人单据（证据-03，严重 B）",
+@pytest.mark.xfail(reason="水平越权：outs view 无归属校验，他人可读他人单据（严重 B）",
                    strict=True)
 def test_qx_044_idor_read_others_out(sess_yucixin, sess_testemp):
     """QX-044 水平越权-业务岗查看他人外出单。**【已知缺陷，本用例记为失败 → xfail】**
 
-    判据出处：证据-03 outs 模块「[读-攻击者 testemp] view?id=1002 -> 看到受害者事由原文=True」
-    （结果 JSON 记「失败」）。函数体写正确行为：他人单据原文不得出现在攻击者响应里。
+    判据：见测试报告摘要 outs 模块「[读-攻击者 testemp] view?id=1002 -> 看到受害者事由原文=True」
+    （已确认结论为「失败」）。函数体写正确行为：他人单据原文不得出现在攻击者响应里。
     """
     rid, marker = _victim_doc("outs-read", "outs", "/home/outs", sess_yucixin)
     page = K.call(sess_testemp, "/home/outs/view", "GET", {"id": rid})
@@ -1189,9 +1188,9 @@ def test_qx_045_owner_can_view_own_leave(sess_yucixin):
     """QX-045 水平越权对照-本人查看本人请假单（**对照组，判定为通过**）。
 
     账号 yucixin(5) 建单后自查 GET /home/leaves/view?id=<本人单>。
-    判据出处：证据-03「[受害者自查] view -> HTTP 200 含事由原文=True」⇒ 本人可正常查看本人单据，
+    判据：见测试报告摘要「[受害者自查] view -> HTTP 200 含事由原文=True」⇒ 本人可正常查看本人单据，
     **对照成立**：QX-039~044 的失败不是「接口整体不可用」，而是**缺归属校验**。
-    结果 JSON 记「通过」。
+    已确认结论为「通过」。
     """
     rid, marker = _victim_doc("leaves-owner", "leaves", "/home/leaves", sess_yucixin)
     page = K.call(sess_yucixin, "/home/leaves/view", "GET", {"id": rid})
@@ -1205,19 +1204,19 @@ def test_qx_045_owner_can_view_own_leave(sess_yucixin):
 
 # ===========================================================================
 # QX-047 / QX-048：站内消息越权（app/home/controller/Message.php 四处无归属校验）
-#   对照：同文件的 view()/read()/reply()/resend()/add() 五处**有**校验（证据-05 §一）。
+#   对照：同文件的 view()/read()/reply()/resend()/add() 五处**有**校验。
 # ===========================================================================
 @pytest.mark.known_defect
-@pytest.mark.xfail(reason="缺陷一 check() 无归属条件，可越权改他人收件箱状态（证据-05，严重 B）",
+@pytest.mark.xfail(reason="缺陷一 check() 无归属条件，可越权改他人收件箱状态（严重 B）",
                    strict=True)
 def test_qx_047_message_check_others_inbox(sess_yucixin, sess_testemp, sess_testmin):
     """QX-047 水平越权-站内消息越权操作他人收件箱状态。**【已知缺陷，本用例记为失败 → xfail】**
 
     受害者 yucixin 的收件行 oa_msg（由 testmin 发消息产生）→ 攻击者 testemp
     DELETE /home/message/check {type=2 移入垃圾箱, ids=<收件行>}。
-    判据出处：证据-05 缺陷一：「DELETE /home/message/check {type:2, ids:1000} -> code=0 操作成功」，
+    判据：见测试报告摘要 缺陷一：「DELETE /home/message/check {type:2, ids:1000} -> code=0 操作成功」，
     回读 oa_msg.delete_time 被改写（受害者收件箱不再可见该消息）；type=5 星标同样成功
-    ⇒ 预期「被拦截，delete_time/is_star 不被改写」未达成（结果 JSON 记「失败」）。
+    ⇒ 预期「被拦截，delete_time/is_star 不被改写」未达成（已确认结论为「失败」）。
     源码：Message.php check()（第 490-522 行）`MsgList::where(['id'=>$val])->update([...])`
     全程无归属条件；message 模块在 $not_check 白名单内（BaseController.php:115），整体跳过 RBAC。
     函数体写**正确行为**：请求不得被当作成功放行，且他人收件行的 delete_time/is_star 不变。
@@ -1237,20 +1236,20 @@ def test_qx_047_message_check_others_inbox(sess_yucixin, sess_testemp, sess_test
 
 
 @pytest.mark.known_defect
-@pytest.mark.xfail(reason="缺陷二 del() 无归属条件，可越权删他人发件/草稿（证据-05，严重 B）",
+@pytest.mark.xfail(reason="缺陷二 del() 无归属条件，可越权删他人发件/草稿（严重 B）",
                    strict=True)
 def test_qx_048_message_del_others_outbox(sess_yucixin, sess_testemp, sess_testmin):
     """QX-048 水平越权-站内消息越权删除他人发件与草稿。**【已知缺陷，本用例记为失败 → xfail】**
 
     受害者 = 发送者 testmin 的发件行 oa_message → 攻击者 testemp
     DELETE /home/message/del {ids=<发件行>}。
-    判据出处：证据-05 缺陷二：Message.php del()（第 349-359 行）
+    判据：见测试报告摘要 缺陷二：Message.php del()（第 349-359 行）
     `MessageList::where(['id'=>$val])->update(['delete_time'=>time()])` 无任何归属条件，
     实测攻击者可删他人发件/草稿，回读 oa_message.delete_time 被改写
-    ⇒ 预期「被拦截，delete_time 不被改写」未达成（结果 JSON 记「失败」）。
+    ⇒ 预期「被拦截，delete_time 不被改写」未达成（已确认结论为「失败」）。
     说明：用例原文写「查询 oa_message.delete_time」，实际表名**就是** oa_message（发送方凭据），
     执行器备注里「实际表名为 oa_msg」的更正有误 —— oa_msg 是收件镜像（QX-047 的对象），
-    本条删的确实是 oa_message（证据-05 §三原文即 `oa_message.id=1000`）。
+    本条删的确实是 oa_message。
     函数体写**正确行为**：请求不得被放行，且他人发件行的 delete_time 不变。
     """
     mid, _sid = _victim_msg(sess_testmin, UID_YUCXIN)
@@ -1275,8 +1274,8 @@ def test_qx_049_api_employee_data_biz_allowed(sess_yucixin):
     判据出处：REVISIONS['QX-049'] —— 沿用**已撤回**的缺陷候选 C2 的处置：UI 对照法证明业务岗在
     /user/user/index 企业员工页界面上本来就展示手机号列 ⇒ 对该角色属设计如此，原预期
     「被拦截；若返回全量员工（含手机号）则为缺陷」修订为「按设计放行」。真正的问题是
-    **零权限账号**也能取得同一份数据（102 条含 mobile），该问题已由证据-01/证据-02 覆盖，不重复记。
-    结果 JSON 记「通过」（修订后口径）。
+    **零权限账号**也能取得同一份数据（102 条含 mobile），该问题已由私有取证记录 覆盖，不重复记。
+    已确认结论为「通过」（修订后口径）。
     """
     res = K.call(sess_yucixin, "/api/index/get_employee", "GET", {"did": 0})
     K.record("yucixin GET /api/index/get_employee?did=0", res)
@@ -1290,9 +1289,9 @@ def test_qx_050_api_import_superadmin_guard(sess_yucixin):
     """QX-050 API授权-业务岗调用员工导入接口。
 
     账号 yucixin(5)；POST /api/import/import_admin（空载荷）。
-    判据出处：run_functional_cases.py:292 + 源码 app/api/controller/Import.php:66
+    判据：见断言 + 源码 app/api/controller/Import.php:66
     `if($this->uid>1) return to_assign(1, '该操作只能是超级管理员有权限操作')`。
-    结果 JSON 记「通过」。
+    已确认结论为「通过」。
     """
     res = K.call(sess_yucixin, "/api/import/import_admin", "POST", {})
     K.record("yucixin POST /api/import/import_admin", res)
@@ -1306,28 +1305,28 @@ def test_qx_051_api_export_no_rule_node(sess_yucixin):
     判据出处：REVISIONS['QX-051'] —— oa_admin_rule 中**不存在** export 节点，RBAC 无可校验项
     （已撤回缺陷候选 C3）；实测参数缺失/记录不存在时返回 HTTP 500（Export.php:343 的
     `$detail['month_time']` 在 oa_salary 为空时触发），该 500 与 QX-052 同源：
-    **参数未兜底致未定义数组键警告被 ThinkPHP 升级成 ErrorException**（证据-08）。
+    **参数未兜底致未定义数组键警告被 ThinkPHP 升级成 ErrorException**。
     故判据 = is_gate_absent（未出现 405 → 无节点参与比对），实测串里原样保留 500，不粉饰。
-    结果 JSON 记「通过」（修订后口径）。
+    已确认结论为「通过」（修订后口径）。
     """
     res = K.call(sess_yucixin, "/api/export/excel", "POST", {"types": "contract"})
     K.record("yucixin POST /api/export/excel {types=contract}", res)
     K.expect(K.is_gate_absent(res), "导出接口在 RBAC 中无权限节点 → 不应出现 405")
     if res.get("http") == 500:
-        K.record("关联缺陷：参数未兜底致 HTTP 500（与 QX-052 同源，证据-08）", res)
+        K.record("关联缺陷：参数未兜底致 HTTP 500（与 QX-052 同源）", res)
 
 
 @pytest.mark.known_defect
-@pytest.mark.xfail(reason="BUG-01/证据-08：未登录可越过闸门打到定位接口，参数未兜底放大成 HTTP 500",
+@pytest.mark.xfail(reason="BUG-01：未登录可越过闸门打到定位接口，参数未兜底放大成 HTTP 500",
                    strict=True)
 def test_qx_052_api_maplocation_anonymous_blocked():
     """QX-052 API授权-未登录调用定位接口。**【已知缺陷，本用例记为失败 → xfail】**
 
     干净会话（未登录）；GET /api/map/getLocation。
-    判据出处：run_functional_cases.py:294 用 is_blocked（未授权访问的三种合法拦截形态之外
+    判据：见断言 用 is_blocked（未授权访问的三种合法拦截形态之外
     一律算「没拦住」）；实测 **未被拦截**：HTTP 500（HTML 错误页），即请求已越过闸门进到动作体内
-    —— 属证据-08「参数未兜底致参数缺失时返回 500」+ 证据-01「app/api/* 缺闸门」，
-    结果 JSON 记「失败」。
+    —— 属私有取证记录「参数未兜底致参数缺失时返回 500」+ 私有取证记录「app/api/* 缺闸门」，
+    已确认结论为「失败」。
     函数体写**正确行为**：未登录调用应被三种合法形态之一拦下（302 跳登录 / code=405 /
     code=1 请先登录），而不是 500。
     """
@@ -1340,8 +1339,8 @@ def test_qx_053_api_submit_check_anonymous():
     """QX-053 API授权-未登录调用提交审批。
 
     干净会话（未登录）；POST /api/check/submit_check（空载荷）。
-    判据出处：run_functional_cases.py:287（期望 is_need_login）。
-    结果 JSON 记「通过」。
+    判据：见断言（期望 is_need_login）。
+    已确认结论为「通过」。
     """
     res = K.call(None, "/api/check/submit_check", "POST", {})
     K.record("(未登录) POST /api/check/submit_check", res)
@@ -1353,15 +1352,15 @@ def test_qx_053_api_submit_check_anonymous():
 # ===========================================================================
 @pytest.mark.known_defect
 @pytest.mark.xfail(reason="缺陷一：app/api/BaseController::checkLogin() 只判 Session::has()，"
-                          "缺会话超时/锁屏/改密/权限四道中的三道（证据-01 §c）",
+                          "缺会话超时/锁屏/改密/权限四道中的三道",
                    strict=True)
 def test_qx_054_api_session_timeout(sess_admin):
     """QX-054 API授权-会话超时后调用接口。**【已知缺陷，本用例记为失败 → xfail】**
 
     账号 testmin(108)；把 last_login_time 前移 36001 秒后先调 /api 只读端点、再访问 /home 页面。
-    判据出处：run_functional_cases_perm.py:517-547 —— 期望 home 页面 302 跳登录（实测符合）
-    **且** /api 接口返回 code=1「请先登录」（实测仍 code=0 返回业务数据，未判超时）⇒ 结果 JSON 记「失败」。
-    关联缺陷：与**已归档的缺陷一（证据-01 §c）同源**，不另立新缺陷 ——
+    判据：见断言 —— 期望 home 页面 302 跳登录（实测符合）
+    **且** /api 接口返回 code=1「请先登录」（实测仍 code=0 返回业务数据，未判超时）⇒ 已确认结论为「失败」。
+    关联缺陷：与**已归档的缺陷一同源**，不另立新缺陷 ——
     app/api/BaseController::checkLogin() 只判断 Session::has()，不含超时/锁屏/强制改密/权限检查。
     构造必须用 **MySQL 自身时钟**（Windows 时钟实测比 WSL/PHP 快 147 秒，用 Python time() 会引入偏差）。
     会话隔离：本用例另起一个登录会话（不改用 sess_testmin 夹具会话），并在 finally 里把
@@ -1396,13 +1395,13 @@ def test_qx_055_role_change_effective_two_way(sess_admin, sess_testmin):
     r"""QX-055 权限缓存-改角色后权限生效性验证（授权 / 回收**双向对照**）。
 
     账号 admin(1) 改角色组 4；观察对象 testmin(108)。
-    判据出处：run_functional_cases_perm.py:502-515 —— 双向对照：授权后 code=0（放行）、
+    判据：见断言 —— 双向对照：授权后 code=0（放行）、
     回收后 code=405（拦截），且**清缓存前后结果均不变** ⇒ 结论「角色组权限变更保存后即时生效，
     无需额外操作」；机制依据（读源码，非推断）：clear_cache($key) → think\\Cache::clear()
     无 $tag 形参、File::clear() 亦无参且直接 rmdir 整个缓存目录 ⇒ 传入的 $key 被忽略，
     任何一次 clear_cache() 都是全量清空，故 Role.php:90-91 只写 adminMenu/MobileRules 与
     Rule.php / Module.php / Position.php 写 adminRules 的差异**不产生行为差异**。
-    结果 JSON 记「通过」。
+    已确认结论为「通过」。
     """
     res, rules = _set_group4_rules(sess_admin, [NODE_ATT], note="（QX-055 前置复位）")
     K.expect((res.get("code") == 0 and rules == str(NODE_ATT), "rules=%s" % rules),

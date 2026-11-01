@@ -2,9 +2,8 @@
 """
 勾股OA 6.1.2 —— 薪资管理模块接口自动化（XZ-001 ~ XZ-015，共 15 条）
 
-【与执行器的关系】
-  请求参数、账号、判据全部取自一次性执行器 `03_接口测试/run_functional_cases_salary.py`
-  （需求的权威来源），结论必须与 `case_results_salary.json` 一致：10 通过 / 5 失败。
+【口径来源】
+  请求参数、账号、判据全部取自私有一次性执行器，结论与测试报告摘要一致：10 通过 / 5 失败。
   **不复用执行器的"结论"字符串** —— 这里自己发请求、自己回读库、自己比较。
   5 条已知缺陷用例标 xfail(strict=True) + known_defect，断言内部写「正确行为」：
   缺陷在时记 xfailed（保留失败证据），缺陷修复后会 XPASS 并直接判 FAILED（活的回归探针）。
@@ -16,7 +15,7 @@
   两处例外，与执行器同构，故**必须整文件顺序执行**：
     · 批次 I(1008) 由 XZ-011 / 012 / 013 顺序累加（1 条 → 3 条 → 7 条）
     · 批次 J(1009) 由 XZ-014 / 015 顺序接力（XZ-015 的删除对象由 XZ-014 留下）
-  执行器 `main()` 同样以 `--only` 直接拒绝局部执行（run_functional_cases_salary.py:725-728）。
+  私有执行器的 `main()` 同样以 `--only` 直接拒绝局部执行。
 
 【夹具】15 条全部依赖薪资夹具（teststaff/110、组 5、职位 5、批次 1000~1009 + 明细 A 的 3 条）。
   模块级 session 级 autouse fixture 引用 conftest 的 `fixture_salary`：开跑前自动
@@ -42,7 +41,7 @@
   现行状态（本轮实测复验，不再是阻断）：`setup_salary_data.py --apply` 落库 10/3/1，
   `conftest._verify_salary()` 返回 True（"批次 10/10、批次A明细 3/3、teststaff(110) 1/1"）。
   故本模块**不做任何绕过**，`fixture_salary` 由框架按约定建立；此前在项目外用等价夹具取得的
-  10 passed / 5 xfailed 与 case_results_salary.json 逐条一致，现由框架内夹具正式复现。
+  10 passed / 5 xfailed 与测试报告摘要逐条一致，现由框架内夹具正式复现。
 
 【框架未覆盖的两处能力（就地只读实现，**未改动框架**，详见各自 docstring）】
   · `K.call()` 只支持 GET/POST（其余方法一律走 sess.post）⇒ DELETE 动作见 `_delete()`
@@ -269,7 +268,7 @@ def test_xz_002_staff_view_others_record(sess_teststaff):
     判据出处：app/oa/controller/Salary.php:59 的 view($id) 直接 $this->model->getById($id)，
     既无 uid 判断也无 status 判断（对照同文件 :45-47 的 datalist 明确有 uid+status 双过滤）。
     满足测试计划 §2.1「UI 对照法」：界面受限（本人列表无任何指向他人明细的入口）而接口不受限。
-    关联缺陷：BUG-19（一般 B）；关联证据：证据-14。
+    关联缺陷：BUG-19（一般 B）。
     本条断言写「正确行为」：越权读取必须被拒绝 —— 缺陷在时失败 → xfail；
     修复后通过 → XPASS → strict 模式下 FAILED，提醒回来销账。
     """
@@ -345,7 +344,7 @@ def test_xz_004_own_unpaid_record_not_readable(sess_fengcailing, sess_teststaff)
     判据出处：datalist 过滤了 status=1（app/oa/controller/Salary.php:47），
     view($id) 未过滤（同文件 :59）—— 同一函数同时缺 uid 与 status 两道校验。
     前置：经接口在待发放批次 B(1001) 为 teststaff 建一条明细（真实接口，非 SQL）。
-    关联缺陷：BUG-19（作为同一处缺失的佐证并入）；关联证据：证据-14。
+    关联缺陷：BUG-19（作为同一处缺失的佐证并入）。
     本条断言写「正确行为」：未发放明细既不在本人列表、也不可读详情。
     """
     b = BATCH["B"]
@@ -442,7 +441,7 @@ def test_xz_006_negative_basic_salary(sess_fengcailing):
     与 id(require)，20 多个金额字段一个都没校验；控制器 app/adm/controller/Salary.php:134-184
     只对空值置 0；前端 layui 的 number 规则是 isNaN(value)（form.js:31-35），
     isNaN('-8000.00')===false ⇒ 负数在界面上同样放行，属前后端均无校验。
-    关联缺陷：BUG-20（一般 C）；关联证据：证据-15。批次 D(1003) 由本条独占。
+    关联缺陷：BUG-20（一般 C）。批次 D(1003) 由本条独占。
     本条断言写「正确行为」：应被拒绝，或至少不得落库为负值。
     """
     cols = ["salary_basic", "total_payable", "total_payment"]
@@ -464,7 +463,7 @@ def test_xz_007_negative_deduction_items(sess_fengcailing):
 
     判据出处：同 XZ-006（RecordsValidate 规则表无金额字段校验）。
     后果：负扣款经 update_salary() 的 Σdeduct_social / Σdeduct_gongjijin 反向推高批次汇总
-    amount（算式见 XZ-011）。关联缺陷：BUG-20（一般 C）；关联证据：证据-15。
+    amount（算式见 XZ-011）。关联缺陷：BUG-20（一般 C）。
     批次 E(1004) 由本条独占。断言写「正确行为」：负扣款应被拒绝。
     """
     cols = ["deduct_social", "deduct_gongjijin", "total_statutory", "total_payment"]
@@ -487,7 +486,7 @@ def test_xz_008_negative_total_payment(sess_fengcailing):
     判据出处：应发/应扣/代扣代缴/实发四列在界面上是 JS 算好后经 <input type="hidden">
     提交的（records_add.html:77-85 与 :150-180），**服务端只做入库、不重算也不校验**
     （app/adm/controller/Salary.php:130-205）—— 即客户端可直接指定实发额。
-    关联缺陷：BUG-20（一般 C）；关联证据：证据-15。批次 F(1005) 由本条独占。
+    关联缺陷：BUG-20（一般 C）。批次 F(1005) 由本条独占。
     断言写「正确行为」：不得存在实发为负的工资条（被拒绝，或重算后不为负）。
     """
     b = BATCH["F"]
